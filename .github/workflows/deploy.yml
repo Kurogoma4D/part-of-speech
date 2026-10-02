@@ -7,25 +7,25 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
-env:
-  WASM_PACK_VERSION: 0.13.1
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # rust-toolchain.toml が channel / target / components を決める
       - name: Install Rust toolchain
-        run: rustup show active-toolchain || rustup toolchain install
+        run: rustup toolchain install
 
       - name: Cache cargo and target
         uses: actions/cache@v4
@@ -39,25 +39,16 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Install wasm-pack
-        run: |
-          curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-            | tar -xz -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.13.1
 
       # --locked で Cargo.lock を厳守する。IPADIC は lindera のビルド時に取得される
       - name: Build wasm
         run: wasm-pack build crates/engine --target web -- --locked
 
-      # pnpm のバージョンは web/package.json の packageManager から決まる
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: web/package.json
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+      # Node / pnpm は mise.toml に従う
+      - uses: jdx/mise-action@v2
 
       - name: Install web dependencies
         run: pnpm --dir web install --frozen-lockfile
@@ -74,6 +65,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

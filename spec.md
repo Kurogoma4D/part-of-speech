@@ -96,7 +96,6 @@
 
 ## 8. Supply-Chain Security
 - Dependencies: `pnpm-lock.yaml` と `Cargo.lock` をコミットする
-- CI hardening: Dependabot を有効化し、npm・Cargo・GitHub Actions の更新 PR を受け取る
 
 ## 9. Constraints
 ### Project metadata

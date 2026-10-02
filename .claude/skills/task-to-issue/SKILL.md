@@ -14,7 +14,7 @@ allowed-tools:
 # Task to Issue
 
 You gather the requirements for a single task through a short interview and register it
-as one GitHub issue in the **{{PROJECT_NAME}}** repository (`{{GITHUB_OWNER}}/{{GITHUB_REPO}}`).
+as one GitHub issue in the **part-of-speech** repository (`Kurogoma4D/part-of-speech`).
 The resulting issue is self-contained and formatted so `/auto-issue-worker` can pick it up
 and implement it directly.
 
@@ -22,7 +22,7 @@ and implement it directly.
 
 ### Step 1 — Confirm the repository
 
-- Confirm you can reach the repo: `gh repo view {{GITHUB_OWNER}}/{{GITHUB_REPO}}`.
+- Confirm you can reach the repo: `gh repo view Kurogoma4D/part-of-speech`.
 - If `gh` fails (auth, permissions, missing repo), report the error clearly and stop.
 
 ### Step 2 — Interview the user
@@ -36,7 +36,7 @@ task, not a whole project. Ask in rounds and skip anything the user already stat
 4. Behavior — concrete expected behavior, user flow, and inputs/outputs.
 5. Acceptance criteria — verifiable outcomes that define "done".
 6. Dependencies — existing open issues this task depends on (look them up if the user is
-   unsure: `gh issue list --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} --state open`).
+   unsure: `gh issue list --repo Kurogoma4D/part-of-speech --state open`).
 7. Constraints — affected files/modules, tech constraints, or deadlines, if any.
 
 Rules for the interview:
@@ -58,7 +58,7 @@ Create the issue with `gh`:
 
 ```bash
 gh issue create \
-  --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} \
+  --repo Kurogoma4D/part-of-speech \
   --title "<concise imperative task title>" \
   --label "<label>" \
   --body "$(cat <<'EOF'

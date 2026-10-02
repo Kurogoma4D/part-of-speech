@@ -13,7 +13,7 @@ allowed-tools:
 
 # Spec Builder
 
-You gather requirements for the **{{PROJECT_NAME}}** project through a structured
+You gather requirements for the **part-of-speech** project through a structured
 interview and consolidate them into a single `spec.md` file at the repository root.
 The resulting `spec.md` is the source of truth for the `spec-to-issues` skill, which
 breaks it into GitHub issues.
@@ -122,7 +122,7 @@ Write the gathered requirements to `spec.md` at the repository root using the te
 Omit sections that genuinely do not apply, but keep the heading order.
 
 ```markdown
-# {{PROJECT_NAME}} — Specification
+# part-of-speech — Specification
 
 > Status: Draft · Last updated: <YYYY-MM-DD>
 

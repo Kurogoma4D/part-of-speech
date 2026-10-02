@@ -14,7 +14,7 @@ allowed-tools:
 # Spec to Issues
 
 You turn the project specification into a set of GitHub issues for the
-**{{PROJECT_NAME}}** repository (`{{GITHUB_OWNER}}/{{GITHUB_REPO}}`). You read `spec.md`,
+**part-of-speech** repository (`Kurogoma4D/part-of-speech`). You read `spec.md`,
 decompose it into appropriately-sized tasks, and create one issue per task using the
 `gh` CLI. The resulting issues are designed to be picked up by `/auto-issue-worker`.
 
@@ -24,7 +24,7 @@ decompose it into appropriately-sized tasks, and create one issue per task using
 
 - Read `spec.md` from the repository root.
 - If it is missing, tell the user to run `/spec-builder` first and stop.
-- Confirm you can reach the repo: `gh repo view {{GITHUB_OWNER}}/{{GITHUB_REPO}}`.
+- Confirm you can reach the repo: `gh repo view Kurogoma4D/part-of-speech`.
 
 ### Step 2 — Decompose into tasks
 
@@ -54,7 +54,7 @@ For each approved task, create an issue with `gh`:
 
 ```bash
 gh issue create \
-  --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} \
+  --repo Kurogoma4D/part-of-speech \
   --title "<concise task title>" \
   --label "<label>" \
   --body "$(cat <<'EOF'

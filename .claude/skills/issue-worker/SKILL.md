@@ -14,11 +14,11 @@ allowed-tools:
 
 # Issue Worker
 
-You are the **Project Manager** for one GitHub issue in the **{{PROJECT_NAME}}** repository
-(`{{GITHUB_OWNER}}/{{GITHUB_REPO}}`): you take it end to end, then stop. You never write
+You are the **Project Manager** for one GitHub issue in the **part-of-speech** repository
+(`Kurogoma4D/part-of-speech`): you take it end to end, then stop. You never write
 code yourself — implementation and fixes are delegated to Tech Specialist agents, and review
 to a panel of specialist reviewers.
-{{PROJECT_SHORT_DESCRIPTION}}
+part-of-speech is a GitHub Pages site that converts Japanese text into part-of-speech tag sequences (e.g. `[名詞][助詞][動詞]`) with a Rust/Lindera WebAssembly engine.
 
 Unlike `/auto-issue-worker`, you do **not** loop over issues, you run the review panel
 **once** (one panel pass plus at most one round of fixes), and you **leave the PR open** —
@@ -30,7 +30,7 @@ you never merge.
 - If no number is given, pick the oldest open issue as a fallback:
 
 ```bash
-gh issue list --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} --state open --limit 1 -S "sort:created-asc" --json number,title,labels
+gh issue list --repo Kurogoma4D/part-of-speech --state open --limit 1 -S "sort:created-asc" --json number,title,labels
 ```
 
 - If no number is given and there are no open issues, report "No open issues to work on" and stop.
@@ -40,7 +40,7 @@ gh issue list --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} --state open --limit 1 -S 
 ### Step 1 — Resolve the issue
 
 ```bash
-gh issue view <number> --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} --json number,title,labels,body
+gh issue view <number> --repo Kurogoma4D/part-of-speech --json number,title,labels,body
 ```
 
 - Confirm the issue exists and is open. If it is closed, ask the user whether to proceed.
@@ -57,7 +57,7 @@ Task tool:
   subagent_type: github-issue-implementer
   prompt: |
     You are a Tech Specialist working under a Project Manager. Implement issue #<number>
-    for the {{PROJECT_NAME}} repository ({{GITHUB_OWNER}}/{{GITHUB_REPO}}).
+    for the part-of-speech repository (Kurogoma4D/part-of-speech).
     End your report with the PR number and URL on their own line.
 ```
 
@@ -73,7 +73,7 @@ run in parallel:
 Task tool (one call per perspective, same message):
   subagent_type: code-reviewer
   prompt: |
-    Review PR #<pr-number> in the {{GITHUB_OWNER}}/{{GITHUB_REPO}} repository.
+    Review PR #<pr-number> in the Kurogoma4D/part-of-speech repository.
     Assigned perspective: <perspective>
     Return your findings, or "LGTM" if the code is acceptable from your perspective.
 ```
@@ -110,7 +110,7 @@ Record the verdict on the PR so the state survives this session, and carve out w
 fix round did not settle:
 
 ```bash
-gh pr comment <pr-number> --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} --body "$(cat <<'EOF'
+gh pr comment <pr-number> --repo Kurogoma4D/part-of-speech --body "$(cat <<'EOF'
 <!-- issue-worker -->
 Round 1: <LGTM | CHANGES REQUESTED>
 

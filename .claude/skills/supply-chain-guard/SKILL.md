@@ -20,7 +20,7 @@ allowed-tools:
 
 # Supply Chain Guard
 
-You harden the **{{PROJECT_NAME}}** repository (`{{GITHUB_OWNER}}/{{GITHUB_REPO}}`) against
+You harden the **part-of-speech** repository (`Kurogoma4D/part-of-speech`) against
 software supply-chain attacks. You do two things:
 
 1. **Establish guardrails** — apply preventive configuration (dependency pinning, install
@@ -35,7 +35,12 @@ config file or files an issue goes through the user's approval first.
 
 Project tech stack (use it to pick the right package manager, registry, and CI specifics):
 
-{{TECH_STACK}}
+- **Engine**: Rust (stable) + Lindera with embedded IPADIC, compiled to WebAssembly via wasm-bindgen / wasm-pack
+- **Frontend**: Vite + TypeScript (no UI framework), plain CSS with design tokens (CSS custom properties)
+- **Testing**: `cargo test` (engine), Vitest (frontend)
+- **Lint / format**: rustfmt, clippy, Biome, `tsc --noEmit`
+- **Package managers**: Cargo, pnpm (Node.js LTS and pnpm pinned via mise)
+- **Hosting**: GitHub Pages (static files only), deployed by GitHub Actions on push to `master`
 
 ## Workflow
 
@@ -130,7 +135,7 @@ For each approved finding, create an issue with `gh`, keeping the body compatibl
 
 ```bash
 gh issue create \
-  --repo {{GITHUB_OWNER}}/{{GITHUB_REPO}} \
+  --repo Kurogoma4D/part-of-speech \
   --title "[supply-chain] <concise risk title>" \
   --label "supply-chain" \
   --body "$(cat <<'EOF'

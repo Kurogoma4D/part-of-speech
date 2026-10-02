@@ -113,11 +113,20 @@ describe("POST /api/convert", () => {
 
 	it("503 when inference throws", async () => {
 		const { call, run } = setup([]);
-		run.mockRejectedValueOnce(new Error("quota"));
+		run.mockRejectedValue(new Error("quota"));
 		expect((await call(req)).status).toBe(503);
+		expect(run).toHaveBeenCalledTimes(2);
 	});
 
-	it("405 for GET and 404 for other paths", async () => {
+	it("retries once when inference throws", async () => {
+		const { call, run } = setup([]);
+		run.mockRejectedValueOnce(new Error("blip"));
+		run.mockResolvedValueOnce({ response: good });
+		expect((await call(req)).status).toBe(200);
+		expect(run).toHaveBeenCalledTimes(2);
+	});
+
+	it("405 for PUT and 404 for other paths", async () => {
 		const { call } = setup();
 		expect((await call(req, { method: "PUT" })).status).toBe(405);
 		const res = await worker.fetch(new Request(`${ORIGIN}/api/x`), {} as Env);

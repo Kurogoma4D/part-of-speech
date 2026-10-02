@@ -54,10 +54,17 @@ const refresh = () => {
 	input.readOnly = busy;
 };
 
-const turnstile = mountTurnstile(widget, (t) => {
-	token = t;
-	refresh();
-});
+const turnstile = mountTurnstile(
+	widget,
+	(t) => {
+		token = t;
+		refresh();
+	},
+	(message) => {
+		status.textContent = message;
+		status.dataset.status = "error";
+	},
+);
 
 const converter = createConverter({
 	convert: async (text) => {

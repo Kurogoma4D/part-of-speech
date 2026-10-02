@@ -3,8 +3,8 @@ import "./styles/base.css";
 import { type ConverterState, createConverter } from "./converter";
 import { createCopyButton } from "./copy";
 import { loadEngine } from "./engine";
-import { bindShareButton } from "./share";
 import { formatProgress, type Progress } from "./progress";
+import { bindShareButton } from "./share";
 import { appTitle } from "./title";
 
 document.title = appTitle;

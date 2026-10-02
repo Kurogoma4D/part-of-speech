@@ -1,6 +1,6 @@
 import type { ConverterState } from "./converter";
 
-export const SITE_URL = "https://kurogoma4d.github.io/part-of-speech/";
+export const SITE_URL = "https://part-of-speech.kurogoma4d.workers.dev/";
 
 // X のドキュメント（docs.x.com）に到達できなかったため、twitter-text の公開仕様に基づく保守的な値。
 // 投稿は重み付け 280、URL は t.co 短縮で 23 固定、日本語など CJK は 1 文字 2 として数える。

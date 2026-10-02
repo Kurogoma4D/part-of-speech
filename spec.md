@@ -3,63 +3,64 @@
 > Status: Draft · Last updated: 2026-10-02
 
 ## 1. Overview
-入力された日本語テキストを形態素解析で分かち書きし、各トークンを `[名詞]` `[動詞]` のような品詞タグに置き換えて表示する Web サイト。記号・伸ばし棒・波ダッシュ・空白・改行は変換せず元の文字のまま残す。
+入力された日本語テキストを LLM（Cloudflare Workers AI）で分かち書きし、各語を `[挨拶]` `[人名]` `[動詞]` のような文脈に沿ったラベルに置き換えて表示する Web サイト。記号・伸ばし棒・空白・改行などは変換せず元の文字のまま残す。ラベルの選び方・出力形式・検証ルールは `docs/rewrite-guide.md` に従う。
 
-形態素解析エンジンは Rust（Lindera）を WebAssembly にビルドしてブラウザ内で動かし、サーバーを持たずに GitHub Pages で公開する。
+フロントエンドと BFF（`POST /api/convert`）を 1 つの Cloudflare Worker（Static Assets）で配信する。
 
 例を以下に示す。
 
 ```
-入力: 今日はいい天気だねー。
-出力: [名詞][助詞][形容詞][名詞][助動詞][助詞]ー。
+入力: こんにちは、田中さん！
+出力: [挨拶]、[人名][敬称]！
 ```
 
 ## 2. Goals & Success Criteria
-- テキストを入力すると、ブラウザ内だけで品詞タグ列に変換される（外部 API への通信なし）
-- 記号・伸ばし棒・波ダッシュ・空白・改行が入力どおりの位置に残る
-- `master` への push で GitHub Pages に自動デプロイされる
+- テキストを入力して「変換」を押すと、ラベル列に変換される
+- 記号・伸ばし棒・空白・改行が入力どおりの位置に残る
+- 500 文字を超える入力と、他オリジンからのリクエストは拒否される
+- `master` への push で Cloudflare Workers に自動デプロイされる
 
 ## 3. Scope
-- Rust + Lindera による品詞タグ変換エンジン（wasm）
+- Cloudflare Worker（BFF）による Workers AI を使った分かち書きとラベル付け
 - Vite + TypeScript による単一ページのフロントエンド
-- 入力中のリアルタイム変換
+- 変換ボタンによる 1 回ごとの変換
 - 変換結果のコピーボタン
 - 変換結果の X への共有ボタン
+- Turnstile によるボット検証
 - デザイントークン・ロゴ・favicon・OGP 画像・ブランドガイド
-- GitHub Actions による GitHub Pages デプロイ
+- GitHub Actions による Cloudflare Workers へのデプロイ
 
 ## 4. Out of Scope
-- 品詞の細分類（`[名詞-固有名詞]` など）の表示
 - 日本語以外の言語の解析
 - ユーザー辞書の追加・編集
-- サーバーサイド処理、変換履歴の保存
-- トークンのホバー表示・品詞ごとの色分け
+- IP 単位のレート制限
+- 変換結果のキャッシュ、変換履歴の保存
+- トークンのホバー表示・ラベルごとの色分け
 
 ## 5. Functional Requirements
-### FR-1: 品詞タグ変換エンジン
-- 入力文字列を Lindera（IPADIC 同梱）で形態素解析し、各トークンを品詞大分類の `[品詞]` に置き換えた文字列を返す
-- トークン間に区切り文字は入れない（例: `[名詞][助詞][動詞]`）
-- wasm-bindgen で `convert(input: string): string` を JS に公開する
-- 受け入れ基準
-  - `猫が走る` → `[名詞][助詞][動詞]`
-  - 空文字列 → 空文字列
+### FR-1: 変換 API
+- `POST /api/convert` は `{ "text": string, "turnstileToken": string }` を受け取り、`{ "result": string }` を返す
+- 処理順序は次のとおり
+  1. `Origin` が Worker 自身のオリジンと一致しなければ 403
+  2. `text` が空または 500 文字を超えれば 400
+  3. Turnstile トークンを siteverify で検証し、失敗なら 403
+  4. Workers AI にガイドのプロンプトで推論させる
+  5. 出力がガイドの形式に合わなければ 1 回だけ再推論し、それでも合わなければ 502。推論の失敗は 503
+- エラーレスポンスは `{ "error": string }`。入力テキストはログに出さない
+- モデル ID は `web/wrangler.jsonc` の `vars.MODEL` で差し替える
 
 ### FR-2: 変換しない文字の保持
-- 次のものは品詞タグに置き換えず、元の文字のまま出力する
-  - 品詞大分類が `記号` のトークン（句読点、括弧、`！` `？` など）
-  - 単独で現れる伸ばし棒（`ー` `－` など）、および語末で語を延長している伸ばし棒（`だよー` `ねーー` の延長部分）
-  - 波ダッシュ（`〜` `～`）
-  - 空白（半角・全角スペース、タブ）と改行
-- 語の構成要素になっている伸ばし棒は語の一部として変換する（`コーヒー` → `[名詞]`、`すごーい` → `[形容詞]`）
+- ガイドの保持対象（記号、空白、改行、絵文字、`笑` `w`、伸ばし棒、小書き文字、一部の助詞）は元の文字のまま出力する
 - 受け入れ基準
-  - `今日はいい天気だねー。` → `[名詞][助詞][形容詞][名詞][助動詞][助詞]ー。`
-  - `えっ〜！？` の `〜！？` がそのまま残る
+  - `走れ！\n止まるな…` → `[命令形]！\n[動詞][終助詞]…`
   - 改行を含む複数行の入力で、改行位置が入力と一致する
 
 ### FR-3: 入力と結果表示
-- テキストエリアへの入力に合わせ、debounce して自動で変換し結果欄を更新する
-- wasm の読み込み中はローディング状態を表示し、読み込み完了後に入力済みテキストを変換する
-- wasm の読み込みに失敗した場合はエラーメッセージを表示する
+- 「変換」ボタン（Ctrl/Cmd+Enter でも可）で BFF を 1 回呼ぶ。リアルタイム変換はしない
+- 入力欄に 500 文字の上限を設け、残り文字数を表示する
+- Turnstile ウィジェットを表示し、そのトークンをリクエストに含める。変換のたびにウィジェットをリセットする
+- 変換中はボタンを無効にし、処理中であることを表示する
+- 失敗したらエラーメッセージと再試行ボタンを表示する
 
 ### FR-4: 結果のコピー
 - ボタン押下で変換結果をクリップボードへコピーし、完了を表示する
@@ -69,9 +70,9 @@
 - ボタン押下で変換結果とサイト URL を本文に入れた X の投稿画面（`https://x.com/intent/post`）を新しいタブで開く
 - 結果が空のときはボタンを無効化する
 
-### FR-6: GitHub Pages デプロイ
-- `master` への push で wasm とフロントエンドをビルドし、GitHub Pages へデプロイする
-- Vite の `base` をリポジトリ名のサブパス（`/part-of-speech/`）に設定する
+### FR-6: Cloudflare Workers デプロイ
+- `master` への push でフロントエンドをビルドし、`wrangler deploy` で Worker `part-of-speech` にデプロイする
+- 公開 URL は `https://part-of-speech.kurogoma4d.workers.dev/`。Vite の `base` は `/`
 
 ## 6. Design & Branding
 > `frontend-design` スキルを使い、このセクションから作成した Issue で実装する。
@@ -88,14 +89,13 @@
 - DA-4: ブランドガイド — トーン、ロゴの使い方、色の使い分けのルールを `docs/brand.md` にまとめる
 
 ## 7. Non-Functional Requirements
-- 解析はすべてブラウザ内で完結し、入力テキストを外部へ送信しない
-- 初回表示後、一般的な長さ（数百文字）の入力の変換は体感で遅延なく反映される
-- wasm（辞書込み）はブラウザキャッシュを効かせ、2 回目以降の読み込みを速くする
-- キーボード操作で入力・コピー・共有ができ、ボタンにアクセシブルな名前を付ける
+- 入力テキストは変換のために Cloudflare Workers AI へ送信される。入力テキストをログに残さない
+- Turnstile トークンの検証と Origin 検査で、他サイトや自動化された利用を制限する
+- キーボード操作で入力・変換・コピー・共有ができ、ボタンにアクセシブルな名前を付ける
 - モバイル幅でもレイアウトが崩れない
 
 ## 8. Supply-Chain Security
-- Dependencies: `pnpm-lock.yaml` と `Cargo.lock` をコミットする
+- Dependencies: `pnpm-lock.yaml` をコミットする
 
 ## 9. Constraints
 ### Project metadata
@@ -103,26 +103,23 @@
 - Structure: 以下のとおり。
 
 ```
-crates/engine/    # Rust: Lindera による品詞タグ変換 + wasm-bindgen バインディング
-web/              # Vite + TypeScript フロントエンド（wasm-pack の出力を取り込む）
+web/src/          # Vite + TypeScript フロントエンド
+web/worker/       # Cloudflare Worker（BFF）
+web/wrangler.jsonc  # Worker の設定（Static Assets、AI バインディング、MODEL）
 docs/brand.md     # ブランドガイド
 docs/rewrite-guide.md  # LLM 書き換えガイド（出力形式・ラベル選択・プロンプト案）
-.github/workflows # GitHub Pages デプロイ
+.github/workflows # CI と Cloudflare Workers デプロイ
 ```
 
 ### Tech stack
-- Language: Rust（stable、`rust-toolchain.toml` で固定、ターゲット `wasm32-unknown-unknown`）、TypeScript 5（strict）
-- Frameworks / key dependencies: Lindera（`embedded-ipadic`）、wasm-bindgen、wasm-pack、Vite、Vitest
-- Package manager: pnpm（`package.json` の `packageManager` フィールドで固定）、Cargo
+- Language: TypeScript 5（strict）
+- Frameworks / key dependencies: Vite、Vitest、Wrangler、Cloudflare Workers AI、Cloudflare Turnstile
+- Package manager: pnpm（`package.json` の `packageManager` フィールドで固定）
 - Version manager: mise（`mise.toml` で Node.js LTS と pnpm を固定）
-- Lint / format / type check: Biome（TS）、`tsc --noEmit`、rustfmt、clippy。npm scripts から実行する
+- Lint / format / type check: Biome、`tsc --noEmit`。npm scripts から実行する
 - Tooling (QA commands): 以下のとおり。
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-wasm-pack build crates/engine --target web
 pnpm --dir web install --frozen-lockfile
 pnpm --dir web run lint
 pnpm --dir web run typecheck
@@ -131,9 +128,9 @@ pnpm --dir web run build
 ```
 
 ### Other constraints
-- ホスティングは GitHub Pages のみ（静的ファイル、サーバー処理なし）
+- ホスティングは Cloudflare Workers（Static Assets + Worker）。Turnstile のシークレットキーは Worker の secret `TURNSTILE_SECRET_KEY` で管理する
 
 ## 10. Open Questions & Risks
-- IPADIC を同梱した wasm はサイズが大きく（数十 MB 規模になる可能性）、初回読み込みが遅くなる。gzip/brotli 配信や辞書の別ファイル化を実装時に検討する
-- IPADIC が伸ばし棒・波ダッシュを `記号` 以外の品詞（名詞など）に分類する場合や、`だよー` のように語と結合して解析する場合があるため、FR-2 の判定は品詞だけでなく文字種による後処理が必要になる
-- X の共有本文の文字数上限を超える長い結果の扱い（切り詰めるか）
+- LLM は原文の欠落や記号の書き換えなどでガイドの検証に落ちることがあり、再推論でも失敗すると 502 になる
+- Workers AI の無料枠（1 日 10,000 Neurons）を超えると推論が 503 になる
+- X の共有本文の文字数上限を超える長い結果は末尾を切り詰める

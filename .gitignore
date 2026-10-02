@@ -1,4 +1,5 @@
 web/node_modules/
 web/dist/
-target/
-crates/engine/pkg/
+.wrangler/
+web/.dev.vars
+web/.env.local

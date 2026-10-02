@@ -5,23 +5,21 @@
 	"type": "module",
 	"packageManager": "pnpm@10.28.0",
 	"scripts": {
-		"build:wasm": "wasm-pack build ../crates/engine --target web",
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
 		"lint": "biome check .",
 		"format": "biome format --write .",
 		"typecheck": "tsc --noEmit",
-		"test": "vitest run"
-	},
-	"dependencies": {
-		"engine": "link:../crates/engine/pkg"
+		"test": "vitest run",
+		"deploy": "wrangler deploy"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.15",
 		"@types/node": "^22.20.5",
 		"typescript": "^5.9.3",
 		"vite": "^8.3.2",
-		"vitest": "^5.0.3"
+		"vitest": "^5.0.3",
+		"wrangler": "^4.147.0"
 	}
 }

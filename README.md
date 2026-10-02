@@ -51,6 +51,12 @@ pnpm --dir web run build:wasm
 pnpm --dir web run dev
 ```
 
+wasm のビルド時に IPADIC のソースアーカイブ（`mecab-ipadic-2.7.0-20250920.tar.gz`）を取得し、品詞大分類だけに絞った辞書を埋め込みます。オフライン環境では環境変数 `IPADIC_ARCHIVE` にローカルのアーカイブへのパスを指定すると、ダウンロードの代わりにそのファイルを使います（MD5 は同様に検証されます）。
+
+```bash
+IPADIC_ARCHIVE=/path/to/mecab-ipadic-2.7.0-20250920.tar.gz pnpm --dir web run build:wasm
+```
+
 ## チェック
 
 ```bash

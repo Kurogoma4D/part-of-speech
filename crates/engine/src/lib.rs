@@ -5,7 +5,6 @@ mod wasm;
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
-use lindera::dictionary::load_dictionary;
 use lindera::error::LinderaError;
 use lindera::mode::Mode;
 use lindera::segmenter::Segmenter;
@@ -33,6 +32,11 @@ impl From<LinderaError> for Error {
     }
 }
 
+// build.rs が品詞大分類だけに絞って作った辞書を埋め込む。
+mod ipadic_pos {
+    lindera_dictionary::embedded_dictionary!("/ipadic-pos", Loader);
+}
+
 // 辞書の展開は重いため、一度だけ構築して再利用する。
 static SEGMENTER: OnceLock<Result<Segmenter, String>> = OnceLock::new();
 
@@ -40,7 +44,7 @@ static SEGMENTER: OnceLock<Result<Segmenter, String>> = OnceLock::new();
 fn segmenter() -> Result<&'static Segmenter, Error> {
     SEGMENTER
         .get_or_init(|| {
-            load_dictionary("embedded://ipadic")
+            ipadic_pos::load()
                 .map(|dict| Segmenter::new(Mode::Normal, dict, None))
                 .map_err(|e| e.to_string())
         })

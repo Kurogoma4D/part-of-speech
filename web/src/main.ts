@@ -4,6 +4,7 @@ import { type ConverterState, createConverter } from "./converter";
 import { createCopyButton } from "./copy";
 import { loadEngine } from "./engine";
 import { bindShareButton } from "./share";
+import { formatProgress, type Progress } from "./progress";
 import { appTitle } from "./title";
 
 document.title = appTitle;
@@ -16,9 +17,10 @@ const share = document.querySelector<HTMLButtonElement>("#share");
 if (!input || !output || !status || !copyButton || !share)
 	throw new Error("missing converter elements");
 
+let progress: Progress = { loaded: 0, total: 0 };
+
 const statusText = (s: ConverterState): string => {
-	if (s.status === "loading")
-		return "辞書を読み込み中です（初回のみ時間がかかります）…";
+	if (s.status === "loading") return formatProgress(progress);
 	if (s.status === "error")
 		return `変換エンジンの読み込みに失敗しました。ページを再読み込みしてください。(${s.message})`;
 	return s.message ? `変換に失敗しました: ${s.message}` : "";
@@ -32,7 +34,12 @@ const copy = createCopyButton({
 });
 
 const converter = createConverter({
-	load: loadEngine,
+	load: () =>
+		loadEngine((p) => {
+			progress = p;
+			if (converter.getState().status === "loading")
+				status.textContent = statusText(converter.getState());
+		}),
 	onChange: (s) => {
 		output.textContent = s.output;
 		copy.update(s);

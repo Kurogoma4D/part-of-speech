@@ -59,7 +59,7 @@ jobs:
       - name: wasm-pack build
         run: wasm-pack build crates/engine --target web -- --locked
       - name: wasm-pack test
-        run: wasm-pack test --node crates/engine -- --locked
+        run: wasm-pack test --node crates/engine --locked
 
       # Versions come from mise.toml and web/package.json (packageManager).
       - uses: jdx/mise-action@v2

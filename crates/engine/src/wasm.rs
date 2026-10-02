@@ -2,6 +2,12 @@
 
 use wasm_bindgen::prelude::*;
 
+/// 辞書の展開を呼び出し側が選んだ時点（ローディング表示中）に済ませるためのウォームアップ。
+#[wasm_bindgen(js_name = init)]
+pub fn init_js() -> Result<(), JsError> {
+    crate::warm_up().map_err(|e| JsError::new(&e.to_string()))
+}
+
 /// 日本語テキストを品詞タグ列に変換する。失敗時は JS の例外として投げる。
 #[wasm_bindgen(js_name = convert)]
 pub fn convert_js(input: &str) -> Result<String, JsError> {

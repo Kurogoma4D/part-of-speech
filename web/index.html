@@ -29,7 +29,24 @@
       <img class="site-header__logo" src="/logo.svg" alt="" width="32" height="32" />
       <span class="site-header__name">part-of-speech</span>
     </header>
-    <div id="app"></div>
+    <main class="converter">
+      <section class="pane">
+        <label class="pane__label" for="input">入力</label>
+        <textarea
+          id="input"
+          class="pane__box pane__box--input"
+          rows="8"
+          placeholder="ここに日本語の文章を入力"
+          spellcheck="false"
+          autocomplete="off"
+        ></textarea>
+      </section>
+      <section class="pane">
+        <h2 class="pane__label" id="output-label">結果</h2>
+        <output id="output" class="pane__box pane__box--output" aria-labelledby="output-label"></output>
+        <p id="status" class="status" role="status"></p>
+      </section>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

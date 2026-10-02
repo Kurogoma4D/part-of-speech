@@ -48,6 +48,11 @@ fn segmenter() -> Result<&'static Segmenter, Error> {
         .map_err(|msg| Error::Lindera(msg.clone()))
 }
 
+/// 辞書の展開を先に済ませる。失敗は `convert` と同じ `Error` で返る。
+pub fn warm_up() -> Result<(), Error> {
+    segmenter().map(|_| ())
+}
+
 /// 入力を形態素解析し、各トークンを品詞大分類の `[品詞]` に置き換えた文字列を返す。
 ///
 /// 記号・空白・改行・波ダッシュ・語末の伸ばし棒は置き換えず原文のまま出力する。

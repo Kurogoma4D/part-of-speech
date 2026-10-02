@@ -5,6 +5,7 @@
 	"type": "module",
 	"packageManager": "pnpm@10.28.0",
 	"scripts": {
+		"build:wasm": "wasm-pack build ../crates/engine --target web",
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",

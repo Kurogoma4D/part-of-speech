@@ -169,6 +169,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn warm_up_succeeds_and_keeps_convert_working() {
+        warm_up().expect("warm_up failed");
+        assert_eq!(convert("猫").expect("convert failed"), "[名詞]");
+    }
+
+    #[test]
     fn converts_sentence_to_pos_tags() {
         assert_eq!(
             convert("猫が走る").expect("convert failed"),

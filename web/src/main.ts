@@ -2,6 +2,7 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import { type ConverterState, createConverter } from "./converter";
 import { loadEngine } from "./engine";
+import { bindShareButton } from "./share";
 import { appTitle } from "./title";
 
 document.title = appTitle;
@@ -9,7 +10,9 @@ document.title = appTitle;
 const input = document.querySelector<HTMLTextAreaElement>("#input");
 const output = document.querySelector<HTMLElement>("#output");
 const status = document.querySelector<HTMLElement>("#status");
-if (!input || !output || !status) throw new Error("missing converter elements");
+const share = document.querySelector<HTMLButtonElement>("#share");
+if (!input || !output || !status || !share)
+	throw new Error("missing converter elements");
 
 const statusText = (s: ConverterState): string => {
 	if (s.status === "loading")
@@ -18,6 +21,8 @@ const statusText = (s: ConverterState): string => {
 		return `変換エンジンの読み込みに失敗しました。ページを再読み込みしてください。(${s.message})`;
 	return s.message ? `変換に失敗しました: ${s.message}` : "";
 };
+
+let renderShare = (_: ConverterState) => {};
 
 const converter = createConverter({
 	load: loadEngine,
@@ -28,8 +33,12 @@ const converter = createConverter({
 		status.textContent = statusText(s);
 		status.dataset.status =
 			s.message || s.status === "error" ? "error" : s.status;
+		renderShare(s);
 	},
 });
+
+renderShare = bindShareButton(share, converter.getState);
+renderShare(converter.getState());
 
 input.addEventListener("input", () => converter.setInput(input.value));
 // ブラウザのフォーム復元などで読み込み時点に値が入っている場合も変換対象にする。

@@ -104,3 +104,28 @@ body {
 	color: var(--color-accent);
 	font-weight: var(--font-weight-bold);
 }
+
+.share-button {
+	align-self: flex-start;
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--color-accent);
+	border-radius: var(--radius-md);
+	background: var(--color-accent);
+	color: var(--color-on-accent);
+	font: inherit;
+	font-size: var(--font-size-sm);
+	font-weight: var(--font-weight-bold);
+	cursor: pointer;
+}
+
+.share-button:focus-visible {
+	outline: 2px solid var(--color-focus-ring);
+	outline-offset: 2px;
+}
+
+.share-button:disabled {
+	border-color: var(--color-border);
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	cursor: not-allowed;
+}

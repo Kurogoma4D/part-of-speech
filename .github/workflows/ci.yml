@@ -13,53 +13,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-  WASM_PACK_VERSION: "0.13.1"
-
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      # rust-toolchain.toml pins the channel, targets and components.
-      - name: Install Rust toolchain
-        run: |
-          rustup toolchain install
-          rustup target list --installed
-
-      # The engine build downloads IPADIC from lindera.dev; target/ caching avoids re-fetching it.
-      - name: Cache cargo and target
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: cargo-${{ runner.os }}-wasm-pack-${{ env.WASM_PACK_VERSION }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-wasm-pack-${{ env.WASM_PACK_VERSION }}-
-
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
-
-      - name: cargo fmt
-        run: cargo fmt --check
-      - name: cargo clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
-      - name: cargo test
-        run: cargo test --locked
-      - name: wasm-pack build
-        run: wasm-pack build crates/engine --target web -- --locked
-      - name: wasm-pack test
-        run: wasm-pack test --node crates/engine --locked
 
       # Versions come from mise.toml and web/package.json (packageManager).
       - uses: jdx/mise-action@v2
@@ -67,6 +28,7 @@ jobs:
           cache: true
       - name: Install web dependencies
         run: pnpm --dir web install --frozen-lockfile
+      # biome / tsc / vitest cover both web/src and web/worker.
       - name: Lint
         run: pnpm --dir web run lint
       - name: Typecheck
@@ -75,3 +37,5 @@ jobs:
         run: pnpm --dir web run test
       - name: Build
         run: pnpm --dir web run build
+      - name: Dry-run deploy
+        run: pnpm --dir web exec wrangler deploy --dry-run

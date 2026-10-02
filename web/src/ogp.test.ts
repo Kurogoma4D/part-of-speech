@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 const root = new URL("../", import.meta.url);
-const origin = "https://kurogoma4d.github.io/part-of-speech/";
+const origin = "https://part-of-speech.kurogoma4d.workers.dev/";
 
 // Prefer the build output; fall back to the source page, which Vite leaves
 // untouched for meta content values.

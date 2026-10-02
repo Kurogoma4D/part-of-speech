@@ -1,89 +1,59 @@
-export type Status = "loading" | "ready" | "error";
+export type Status = "idle" | "loading" | "ready" | "error";
 
 export interface ConverterState {
 	status: Status;
 	output: string;
-	/** 変換自体が失敗したときのメッセージ。wasm 読み込み失敗は status: "error" で表す。 */
+	/** status が "error" のときの失敗理由。 */
 	message: string;
 }
 
-export interface Engine {
-	convert(input: string): string;
-}
+export const MAX_LENGTH = 500;
+
+export const remainingChars = (text: string): number =>
+	MAX_LENGTH - text.length;
+
+/** 変換ボタンを押せるか。Turnstile のトークンは 1 回の変換で使い切る。 */
+export const canConvert = (
+	text: string,
+	token: string | null,
+	status: Status,
+): boolean =>
+	token !== null &&
+	status !== "loading" &&
+	text.trim() !== "" &&
+	text.length <= MAX_LENGTH;
 
 export interface ConverterOptions {
-	load: () => Promise<Engine>;
+	convert: (text: string) => Promise<string>;
 	onChange: (state: ConverterState) => void;
-	debounceMs?: number;
-	setTimer?: (fn: () => void, ms: number) => unknown;
-	clearTimer?: (id: unknown) => void;
 }
 
-export const DEFAULT_DEBOUNCE_MS = 150;
-
-/** debounce・読み込み状態・変換を DOM から切り離して持つ。 */
+/** 変換の状態遷移を DOM から切り離して持つ。 */
 export function createConverter(opts: ConverterOptions) {
-	const debounceMs = opts.debounceMs ?? DEFAULT_DEBOUNCE_MS;
-	const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-	const clearTimer =
-		opts.clearTimer ??
-		((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
-
-	let state: ConverterState = { status: "loading", output: "", message: "" };
-	let engine: Engine | null = null;
-	let input = "";
-	let timer: unknown = null;
+	let state: ConverterState = { status: "idle", output: "", message: "" };
 
 	const emit = (next: ConverterState) => {
 		state = next;
 		opts.onChange(state);
 	};
 
-	const run = () => {
-		timer = null;
-		if (!engine) return;
-		try {
-			emit({ status: "ready", output: engine.convert(input), message: "" });
-		} catch (e) {
-			emit({
-				status: "ready",
-				output: "",
-				message: e instanceof Error ? e.message : String(e),
-			});
-		}
-	};
-
-	const cancel = () => {
-		if (timer !== null) {
-			clearTimer(timer);
-			timer = null;
-		}
-	};
-
-	opts.onChange(state);
-	const ready = opts.load().then(
-		(e) => {
-			engine = e;
-			// 読み込み中に入力済みのテキストは debounce を待たず変換する。
-			cancel();
-			run();
-		},
-		(e: unknown) => {
-			emit({
-				status: "error",
-				output: "",
-				message: e instanceof Error ? e.message : String(e),
-			});
-		},
-	);
-
 	return {
-		ready,
-		setInput(value: string) {
-			input = value;
-			if (!engine) return;
-			cancel();
-			timer = setTimer(run, debounceMs);
+		async run(text: string): Promise<void> {
+			if (state.status === "loading") return;
+			emit({ status: "loading", output: "", message: "" });
+			try {
+				emit({
+					status: "ready",
+					output: await opts.convert(text),
+					message: "",
+				});
+			} catch (e) {
+				emit({
+					status: "error",
+					output: "",
+					message: e instanceof Error ? e.message : String(e),
+				});
+			}
 		},
 		getState: () => state,
 	};

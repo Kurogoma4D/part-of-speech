@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>part-of-speech</title>
+  <style>
+    .bg { fill: #2f4bd6; }
+    .fg { fill: none; stroke: #ffffff; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+    .dot { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #8ea2ff; }
+      .fg { stroke: #121214; }
+      .dot { fill: #121214; }
+    }
+  </style>
+  <rect class="bg" width="64" height="64" rx="14"/>
+  <path class="fg" d="M26 15H17V49H26M38 15H47V49H38"/>
+  <circle class="dot" cx="32" cy="32" r="3.5"/>
+</svg>

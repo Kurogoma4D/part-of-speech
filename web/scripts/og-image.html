@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="UTF-8" />
+<style>
+  /* Values mirror src/styles/tokens.css (light theme); keep in sync when tokens change. */
+  :root { --bg:#ffffff; --surface:#f6f6f8; --border:#dcdce2; --text:#1a1a1f; --muted:#5c5c66; --accent:#2f4bd6; }
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1200px; height: 630px; background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans","Noto Sans JP","Noto Sans CJK JP","Yu Gothic",system-ui,sans-serif;
+    display: flex; flex-direction: column; justify-content: center; padding: 0 96px; gap: 40px;
+    border-top: 16px solid var(--accent); }
+  .brand { display: flex; align-items: center; gap: 28px; }
+  .brand img { width: 112px; height: 112px; }
+  .brand span { font-size: 80px; font-weight: 700; letter-spacing: -0.01em; }
+  .lead { font-size: 36px; color: var(--muted); line-height: 1.5; }
+  .card { background: var(--surface); border: 2px solid var(--border); border-radius: 16px; padding: 32px 40px; display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; gap: 24px; align-items: baseline; }
+  .label { font-size: 22px; color: var(--muted); width: 80px; flex: none; }
+  .src { font-size: 40px; }
+  .out { font-family: ui-monospace,"DejaVu Sans Mono","Noto Sans Mono CJK JP",monospace; font-size: 40px; font-weight: 700; color: var(--accent); }
+</style>
+<body>
+  <div class="brand"><img src="../public/logo.svg" alt="" /><span>part-of-speech</span></div>
+  <p class="lead">日本語の文章を、品詞タグに置き換える。</p>
+  <div class="card">
+    <div class="row"><span class="label">入力</span><span class="src">私は本を読む</span></div>
+    <div class="row"><span class="label">出力</span><span class="out">[名詞][助詞][名詞][助詞][動詞]</span></div>
+  </div>
+</body>
+</html>

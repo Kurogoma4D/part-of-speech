@@ -106,6 +106,7 @@
 crates/engine/    # Rust: Lindera による品詞タグ変換 + wasm-bindgen バインディング
 web/              # Vite + TypeScript フロントエンド（wasm-pack の出力を取り込む）
 docs/brand.md     # ブランドガイド
+docs/rewrite-guide.md  # LLM 書き換えガイド（出力形式・ラベル選択・プロンプト案）
 .github/workflows # GitHub Pages デプロイ
 ```
 

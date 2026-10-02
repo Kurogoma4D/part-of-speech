@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { appTitle } from "./title";
 
-test("appTitle is part-of-speech", () => {
-	expect(appTitle).toBe("part-of-speech");
+test("appTitle is 例の歌詞のやつ", () => {
+	expect(appTitle).toBe("例の歌詞のやつ");
 });

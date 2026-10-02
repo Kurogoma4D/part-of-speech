@@ -54,7 +54,7 @@ pub fn convert(input: &str) -> Result<String, Error> {
         return Ok(String::new());
     }
     let text = drop_inner_long_vowels(input);
-    let mut tokens = segmenter()?.segment(Cow::Borrowed(text.as_str()))?;
+    let mut tokens = segmenter()?.segment(Cow::Borrowed(&*text))?;
     let mut out = String::new();
     let mut pos_end = 0;
     for token in tokens.iter_mut() {
@@ -81,28 +81,46 @@ fn is_hiragana(c: char) -> bool {
 }
 
 // 「すごーい」のように平仮名の直後で語中にある伸ばし棒は、IPADIC が語を分断するため
-// 解析前に取り除く。語の一部なので出力には影響しない。語末の伸ばし棒は残す。
-fn drop_inner_long_vowels(input: &str) -> String {
-    let chars: Vec<char> = input.chars().collect();
-    let mut out = String::with_capacity(input.len());
+// 解析前に取り除く。語の一部なので出力には影響しない。語末の伸ばし棒や、
+// 平仮名以外が続く伸ばし棒は残す。取り除く対象が無ければ入力を借用のまま返す。
+fn drop_inner_long_vowels(input: &str) -> Cow<'_, str> {
+    let mut out: Option<String> = None;
+    let mut kept_from = 0;
     let mut after_hiragana = false;
-    for (i, &c) in chars.iter().enumerate() {
+    let mut iter = input.char_indices().peekable();
+    while let Some((i, c)) = iter.next() {
         if c == 'ー' && after_hiragana {
-            let next = chars[i..].iter().find(|&&n| n != 'ー');
-            if next.is_some_and(|n| n.is_alphanumeric()) {
-                continue;
+            // 連続する伸ばし棒は一度の走査でまとめて判定する。
+            let mut end = i + c.len_utf8();
+            while let Some(&(j, n)) = iter.peek() {
+                if n != 'ー' {
+                    break;
+                }
+                end = j + n.len_utf8();
+                iter.next();
             }
+            if input[end..].chars().next().is_some_and(is_hiragana) {
+                out.get_or_insert_with(|| String::with_capacity(input.len()))
+                    .push_str(&input[kept_from..i]);
+                kept_from = end;
+            }
+            continue;
         }
-        after_hiragana = is_hiragana(c) || (c == 'ー' && after_hiragana);
-        out.push(c);
+        after_hiragana = is_hiragana(c);
     }
-    out
+    match out {
+        Some(mut s) => {
+            s.push_str(&input[kept_from..]);
+            Cow::Owned(s)
+        }
+        None => Cow::Borrowed(input),
+    }
 }
 
 // 空白・波ダッシュ・伸ばし棒・記号類は IPADIC が記号以外に分類したり語と結合したりするため、
 // 品詞ではなく文字種で判定し、トークン前後の該当部分だけを原文のまま残す。
 fn is_passthrough(c: char) -> bool {
-    c == 'ー' || c == '－' || !c.is_alphanumeric()
+    c == 'ー' || c == 'ｰ' || c == '－' || !c.is_alphanumeric()
 }
 
 fn is_katakana(c: char) -> bool {
@@ -193,8 +211,8 @@ mod tests {
 
     #[test]
     fn wave_dash_and_symbols_are_kept() {
-        assert!(c("えっ〜！？").ends_with("〜！？"));
-        assert!(c("えっ～！？").ends_with("～！？"));
+        assert_eq!(c("えっ〜！？"), "[感動詞]〜！？");
+        assert_eq!(c("えっ～！？"), "[感動詞]～！？");
     }
 
     #[test]
@@ -205,8 +223,10 @@ mod tests {
 
     #[test]
     fn word_extension_is_kept() {
-        assert!(c("だよー").ends_with("ー"));
-        assert!(c("ねーー").ends_with("ーー"));
+        assert_eq!(c("だよー"), "[助動詞][助詞]ー");
+        assert_eq!(c("ねーー"), "[助詞]ーー");
+        assert_eq!(c("だよｰ"), "[助動詞][助詞]ｰ");
+        assert_eq!(c("コーヒーー"), "[名詞]ー");
         assert_eq!(c("ー"), "ー");
     }
 
@@ -214,5 +234,50 @@ mod tests {
     fn whitespace_and_newlines_keep_positions() {
         let out = c("猫が \u{3000}走る\t犬\n猫\r\n犬");
         assert_eq!(out, "[名詞][助詞] \u{3000}[動詞]\t[名詞]\n[名詞]\r\n[名詞]");
+    }
+
+    #[test]
+    fn symbol_only_and_blank_inputs_are_kept() {
+        assert_eq!(c("！？"), "！？");
+        assert_eq!(c("－"), "－");
+        assert_eq!(c("---"), "---");
+        assert_eq!(c("!?#"), "!?#");
+        assert_eq!(c("😀"), "😀");
+        assert_eq!(c("  \u{3000}\n"), "  \u{3000}\n");
+    }
+
+    #[test]
+    fn symbols_between_words_are_kept() {
+        assert_eq!(c("猫－犬"), "[名詞]－[名詞]");
+        assert_eq!(c("猫!犬"), "[名詞]![名詞]");
+        assert_eq!(c("猫😀犬"), "[名詞]😀[名詞]");
+    }
+
+    #[test]
+    fn long_vowel_before_non_hiragana_is_kept() {
+        assert_eq!(c("あーA"), "[フィラー]ー[名詞]");
+        assert_eq!(c("ええーー1"), "[フィラー][フィラー]ーー[名詞]");
+        assert_eq!(c("すごーーい"), "[形容詞]");
+    }
+
+    #[test]
+    fn drop_inner_long_vowels_only_drops_before_hiragana() {
+        assert_eq!(drop_inner_long_vowels("すごーい"), "すごい");
+        assert_eq!(drop_inner_long_vowels("すごーーーい"), "すごい");
+        assert_eq!(drop_inner_long_vowels("あーA"), "あーA");
+        assert_eq!(drop_inner_long_vowels("ええーー1"), "ええーー1");
+        assert_eq!(drop_inner_long_vowels("だよー"), "だよー");
+        assert_eq!(drop_inner_long_vowels("コーヒーい"), "コーヒーい");
+        assert_eq!(drop_inner_long_vowels("あーいーう"), "あいう");
+    }
+
+    #[test]
+    fn drop_inner_long_vowels_borrows_when_unchanged() {
+        assert!(matches!(
+            drop_inner_long_vowels("猫が走る"),
+            Cow::Borrowed(_)
+        ));
+        assert!(matches!(drop_inner_long_vowels("だよー"), Cow::Borrowed(_)));
+        assert!(matches!(drop_inner_long_vowels("すごーい"), Cow::Owned(_)));
     }
 }

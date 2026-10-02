@@ -34,6 +34,7 @@ impl From<LinderaError> for Error {
 // 辞書の展開は重いため、一度だけ構築して再利用する。
 static SEGMENTER: OnceLock<Result<Segmenter, String>> = OnceLock::new();
 
+// 読み込み失敗もプロセス終了まで保持される。辞書は埋め込みのため再試行しても結果は変わらない。
 fn segmenter() -> Result<&'static Segmenter, Error> {
     SEGMENTER
         .get_or_init(|| {
@@ -53,13 +54,16 @@ pub fn convert(input: &str) -> Result<String, Error> {
     let mut tokens = segmenter()?.segment(Cow::Borrowed(input))?;
     let mut out = String::new();
     for token in tokens.iter_mut() {
-        // IPADIC の詳細の先頭が品詞大分類。未知語などで欠ける場合は「未知語」とする。
-        let pos = token.get_detail(0).unwrap_or("未知語");
-        out.push('[');
-        out.push_str(pos);
-        out.push(']');
+        push_tag(&mut out, token.get_detail(0));
     }
     Ok(out)
+}
+
+// IPADIC の詳細の先頭が品詞大分類。詳細が欠ける場合は「未知語」とする。
+fn push_tag(out: &mut String, pos: Option<&str>) {
+    out.push('[');
+    out.push_str(pos.unwrap_or("未知語"));
+    out.push(']');
 }
 
 #[cfg(test)]
@@ -69,13 +73,36 @@ mod tests {
     #[test]
     fn converts_sentence_to_pos_tags() {
         assert_eq!(
-            convert("猫が走る").unwrap_or_default(),
+            convert("猫が走る").expect("convert failed"),
             "[名詞][助詞][動詞]"
         );
     }
 
     #[test]
     fn empty_input_yields_empty_output() {
-        assert_eq!(convert("").unwrap_or_else(|e| e.to_string()), "");
+        assert_eq!(convert("").expect("convert failed"), "");
+    }
+
+    #[test]
+    fn converts_japanese_mixed_with_ascii() {
+        assert_eq!(
+            convert("Rustは速い").expect("convert failed"),
+            "[名詞][助詞][形容詞]"
+        );
+    }
+
+    #[test]
+    fn repeated_calls_return_identical_results() {
+        let first = convert("猫が走る").expect("convert failed");
+        let second = convert("猫が走る").expect("convert failed");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn missing_detail_falls_back_to_unknown_tag() {
+        let mut out = String::new();
+        push_tag(&mut out, None);
+        push_tag(&mut out, Some("名詞"));
+        assert_eq!(out, "[未知語][名詞]");
     }
 }

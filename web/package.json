@@ -1,0 +1,22 @@
+{
+	"name": "part-of-speech-web",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"packageManager": "pnpm@10.28.0",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
+		"typescript": "^5.9.3",
+		"vite": "^8.3.2",
+		"vitest": "^5.0.3"
+	}
+}

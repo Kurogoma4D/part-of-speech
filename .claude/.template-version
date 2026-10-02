@@ -1,0 +1,3 @@
+TEMPLATE_REPO=https://github.com/Kurogoma4D/project-kickstarter.git
+TEMPLATE_REF=main
+TEMPLATE_BASE_SHA=aa27d648fa0d2c17dccfd870c5367e9ef4fc8627

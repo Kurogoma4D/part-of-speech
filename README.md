@@ -30,6 +30,7 @@
 crates/engine/    # 品詞タグ変換エンジン（Rust → wasm）
 web/              # フロントエンド（Vite + TypeScript）
 docs/brand.md     # ブランドガイド
+docs/rewrite-guide.md  # LLM 書き換えガイド
 spec.md           # 仕様書
 ```
 

@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      engine:
+        specifier: link:../crates/engine/pkg
+        version: link:../crates/engine/pkg
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.15

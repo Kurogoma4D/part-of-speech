@@ -90,4 +90,64 @@ describe("createConverter", () => {
 			message: "bad",
 		});
 	});
+
+	it("does not schedule a timer for input typed during loading", async () => {
+		let resolve: (e: Engine) => void = () => {};
+		const { c, timers } = setup(() => new Promise((r) => (resolve = r)));
+		c.setInput("猫");
+		expect(timers.size).toBe(0);
+		resolve(engine());
+		await c.ready;
+		expect(timers.size).toBe(0);
+	});
+
+	it("cancels a pending debounce when loading completes", async () => {
+		const convert = vi.fn((s: string) => `<${s}>`);
+		let resolve: (e: Engine) => void = () => {};
+		const { c, timers } = setup(() => new Promise((r) => (resolve = r)));
+		c.setInput("猫");
+		resolve(engine(convert));
+		await c.ready;
+		expect(convert).toHaveBeenCalledTimes(1);
+		expect(timers.size).toBe(0);
+	});
+
+	it("recovers after a failed conversion", async () => {
+		const convert = vi.fn((s: string) => {
+			if (s === "bad") throw new Error("bad");
+			return `<${s}>`;
+		});
+		const { c, flush } = setup(async () => engine(convert));
+		await c.ready;
+		c.setInput("bad");
+		flush();
+		expect(c.getState().message).toBe("bad");
+		c.setInput("ok");
+		flush();
+		expect(c.getState()).toEqual({
+			status: "ready",
+			output: "<ok>",
+			message: "",
+		});
+	});
+
+	it("stringifies non-Error throws from convert and load", async () => {
+		const failing = setup(async () =>
+			engine(() => {
+				throw "plain";
+			}),
+		);
+		await failing.c.ready;
+		failing.c.setInput("x");
+		failing.flush();
+		expect(failing.c.getState().message).toBe("plain");
+
+		const rejected = setup(() => Promise.reject("nope"));
+		await rejected.c.ready;
+		expect(rejected.c.getState()).toEqual({
+			status: "error",
+			output: "",
+			message: "nope",
+		});
+	});
 });

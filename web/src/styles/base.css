@@ -105,27 +105,32 @@ body {
 	font-weight: var(--font-weight-bold);
 }
 
-.share-button {
-	align-self: flex-start;
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.button {
 	padding: var(--space-2) var(--space-4);
-	border: 1px solid var(--color-accent);
-	border-radius: var(--radius-md);
-	background: var(--color-accent);
-	color: var(--color-on-accent);
 	font: inherit;
 	font-size: var(--font-size-sm);
 	font-weight: var(--font-weight-bold);
+	color: var(--color-on-accent);
+	background: var(--color-accent);
+	border: 1px solid var(--color-accent);
+	border-radius: var(--radius-md);
 	cursor: pointer;
 }
 
-.share-button:focus-visible {
+.button:focus-visible {
 	outline: 2px solid var(--color-focus-ring);
 	outline-offset: 2px;
 }
 
-.share-button:disabled {
-	border-color: var(--color-border);
-	background: var(--color-surface);
+.button:disabled {
 	color: var(--color-text-muted);
+	background: var(--color-surface);
+	border-color: var(--color-border);
 	cursor: not-allowed;
 }

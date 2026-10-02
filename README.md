@@ -41,11 +41,13 @@ spec.md           # 仕様書
 mise install
 rustup target add wasm32-unknown-unknown
 
-# wasm のビルド
-wasm-pack build crates/engine --target web
+# 依存関係のインストール
+pnpm --dir web install --frozen-lockfile
+
+# wasm のビルド（crates/engine/pkg を生成。フロントエンドの起動・ビルドの前に必要）
+pnpm --dir web run build:wasm
 
 # フロントエンドの起動
-pnpm --dir web install --frozen-lockfile
 pnpm --dir web run dev
 ```
 
@@ -55,6 +57,7 @@ pnpm --dir web run dev
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+pnpm --dir web run build:wasm
 pnpm --dir web run lint
 pnpm --dir web run typecheck
 pnpm --dir web run test

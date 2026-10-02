@@ -23,17 +23,20 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # rust-toolchain.toml pins the channel, targets and components.
       - name: Install Rust toolchain
-        run: rustup show active-toolchain || rustup toolchain install
+        run: |
+          rustup toolchain install
+          rustup target list --installed
 
       # The engine build downloads IPADIC from lindera.dev; target/ caching avoids re-fetching it.
       - name: Cache cargo and target
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
@@ -43,10 +46,9 @@ jobs:
             cargo-${{ runner.os }}-wasm-pack-${{ env.WASM_PACK_VERSION }}-
 
       - name: Install wasm-pack
-        run: |
-          if ! wasm-pack --version 2>/dev/null | grep -qx "wasm-pack ${WASM_PACK_VERSION}"; then
-            cargo install wasm-pack --version "${WASM_PACK_VERSION}" --locked --force
-          fi
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
 
       - name: cargo fmt
         run: cargo fmt --check
@@ -55,9 +57,9 @@ jobs:
       - name: cargo test
         run: cargo test --locked
       - name: wasm-pack build
-        run: wasm-pack build crates/engine --target web
+        run: wasm-pack build crates/engine --target web -- --locked
       - name: wasm-pack test
-        run: wasm-pack test --node crates/engine
+        run: wasm-pack test --node crates/engine -- --locked
 
       # Versions come from mise.toml and web/package.json (packageManager).
       - uses: jdx/mise-action@v2

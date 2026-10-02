@@ -1,5 +1,7 @@
 //! 日本語テキストを品詞大分類のタグ列 (`[名詞][助詞]...`) に変換するエンジン。
 
+mod wasm;
+
 use std::borrow::Cow;
 use std::sync::OnceLock;
 

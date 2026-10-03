@@ -41,11 +41,12 @@
 - `POST /api/convert` は `{ "text": string, "turnstileToken": string }` を受け取り、`{ "result": string }` を返す
 - 処理順序は次のとおり
   1. `Origin` が Worker 自身のオリジンと一致しなければ 403
-  2. 送信元 IP（`cf-connecting-ip`）ごとに 60 秒あたり 5 回を超えれば 429（Workers Rate Limiting binding `RATE_LIMITER`）
+  2. 送信元 IP（`cf-connecting-ip`）ごとに 60 秒あたり 5 回を超えれば 429（Workers Rate Limiting binding `RATE_LIMITER`）。カウンターはロケーションごとのため、おおよその値
   3. `text` が空、200 文字を超える、または推論対象の異なる行（文字・数字を含む行）が 20 行を超えれば 400
   4. Turnstile トークンを siteverify で検証し、失敗なら 403
   5. Workers AI にガイドのプロンプトで行ごとに推論させる（同時実行は 4 行まで、同じ行は 1 回だけ）
   6. 出力がガイドの形式に合わなければ 1 回だけ再推論し、それでも合わなければ 502。推論の失敗は 503
+  7. 推論は AI Gateway `part-of-speech` 経由で実行する。ゲートウェイのレート制限（全体で 600 秒あたり 300 回、sliding window）を超えた場合は再推論せず 429。ゲートウェイはリクエストのログ記録（Collect logs）とキャッシュを無効にして運用する（入力テキストを残さないため）
 - エラーレスポンスは `{ "error": string }`。入力テキストはログに出さない
 - モデル ID は `web/wrangler.jsonc` の `vars.MODEL` で差し替える
 

@@ -18,7 +18,11 @@ export interface Env {
 const json = (body: unknown, status: number, headers?: HeadersInit) =>
 	Response.json(body, {
 		status,
-		headers: { "cache-control": "no-store", ...headers },
+		headers: {
+			"cache-control": "no-store",
+			"x-content-type-options": "nosniff",
+			...headers,
+		},
 	});
 const fail = (error: string, status: number) => json({ error }, status);
 

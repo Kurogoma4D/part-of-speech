@@ -61,6 +61,7 @@ describe("POST /api/convert", () => {
 		const { call, run, siteverify } = setup();
 		const res = await call(req);
 		expect(res.status).toBe(200);
+		expect(res.headers.get("x-content-type-options")).toBe("nosniff");
 		expect(await res.json()).toEqual({ result: "[動物]！" });
 		expect(run).toHaveBeenCalledWith(
 			"m",

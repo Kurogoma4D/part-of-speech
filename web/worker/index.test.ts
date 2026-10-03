@@ -35,14 +35,20 @@ function setup(
 			origin = ORIGIN,
 			method = "POST",
 			base = ORIGIN,
-		}: { origin?: string | null; method?: string; base?: string } = {},
+			ip = "203.0.113.7",
+		}: {
+			origin?: string | null;
+			method?: string;
+			base?: string;
+			ip?: string | null;
+		} = {},
 	) =>
 		worker.fetch(
 			new Request(`${base}/api/convert`, {
 				method,
 				headers: {
 					...(origin ? { origin } : {}),
-					"cf-connecting-ip": "203.0.113.7",
+					...(ip ? { "cf-connecting-ip": ip } : {}),
 				},
 				body: typeof body === "string" ? body : JSON.stringify(body),
 			}),
@@ -75,6 +81,47 @@ describe("POST /api/convert", () => {
 		expect(limit).toHaveBeenCalledWith({ key: "203.0.113.7" });
 		expect(siteverify).not.toHaveBeenCalled();
 		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("429 body carries the Japanese error message", async () => {
+		const { limit, call } = setup();
+		limit.mockResolvedValueOnce({ success: false });
+		expect(await (await call(req)).json()).toEqual({
+			error: "リクエストが多すぎます。しばらく待ってから再試行してください。",
+		});
+	});
+
+	it("keys IPv6 by /64 and IPv4 as is", async () => {
+		const { limit, call } = setup();
+		const keyOf = async (ip: string | null) => {
+			limit.mockClear();
+			await call("{", { ip });
+			return (limit.mock.calls[0] as unknown as [{ key: string }])[0].key;
+		};
+		const a = await keyOf("2001:db8:1:2:aaaa:bbbb:cccc:dddd");
+		expect(await keyOf("2001:db8:1:2::1")).toBe(a);
+		expect(await keyOf("2001:db8:1:3::1")).not.toBe(a);
+		expect(await keyOf("2001:0DB8:0001:0002:0:0:0:1")).toBe(a);
+		expect(await keyOf("2001:db8::1")).toBe(await keyOf("2001:db8:0:0:9::2"));
+		expect(await keyOf("2001:db8::1")).not.toBe(a);
+		expect(await keyOf("::1")).toBe(await keyOf("0:0:0:0:5::"));
+		expect(await keyOf("203.0.113.7")).toBe("203.0.113.7");
+		expect(await keyOf(null)).toBe("unknown");
+	});
+
+	it("does not call limit when Origin is rejected", async () => {
+		const { limit, call } = setup();
+		expect((await call(req, { origin: "https://evil.example" })).status).toBe(
+			403,
+		);
+		expect(limit).not.toHaveBeenCalled();
+	});
+
+	it("calls limit before the 413 body check", async () => {
+		const { limit, call } = setup();
+		const res = await call("x".repeat(9 * 1024));
+		expect(res.status).toBe(413);
+		expect(limit).toHaveBeenCalledOnce();
 	});
 
 	it("200 with assembled result", async () => {

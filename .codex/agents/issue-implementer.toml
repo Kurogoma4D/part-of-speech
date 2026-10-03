@@ -40,15 +40,15 @@ You are often dispatched by a Project Manager agent that runs several Tech Speci
 
 # Project Context
 
-**part-of-speech** (`Kurogoma4D/part-of-speech`) is a static website that tokenizes Japanese text in the browser with a Rust/Lindera WebAssembly engine and replaces each token with its part-of-speech tag such as `[名詞]` or `[動詞]`.
+**part-of-speech** (`Kurogoma4D/part-of-speech`) is a website that converts Japanese text into part-of-speech labels such as `[挨拶]` `[人名]` `[動詞]` by sending it to an LLM (Cloudflare Workers AI) through a Cloudflare Worker BFF, keeping symbols, long-vowel marks, spaces, and newlines as they are.
 
 Key technology stack:
-- **Engine**: Rust (stable) + Lindera with embedded IPADIC, compiled to WebAssembly via wasm-bindgen / wasm-pack
+- **Hosting / BFF**: Cloudflare Workers (Static Assets serve the frontend; the Worker handles `POST /api/convert`), deployed by GitHub Actions running `wrangler deploy` on push to `master`
+- **Inference**: Cloudflare Workers AI behind the AI Gateway `part-of-speech` (model ID in `web/wrangler.jsonc` `vars.MODEL`)
 - **Frontend**: Vite + TypeScript (no UI framework), plain CSS with design tokens (CSS custom properties)
-- **Testing**: `cargo test` (engine), Vitest (frontend)
-- **Lint / format**: rustfmt, clippy, Biome, `tsc --noEmit`
-- **Package managers**: Cargo, pnpm (Node.js LTS and pnpm pinned via mise)
-- **Hosting**: GitHub Pages (static files only), deployed by GitHub Actions on push to `master`
+- **Testing**: Vitest
+- **Lint / format**: Biome, `tsc --noEmit`
+- **Package manager**: pnpm (Node.js LTS and pnpm pinned via mise)
 
 # Core Workflow
 
@@ -78,12 +78,11 @@ When given a GitHub issue number, execute this precise sequence:
 
 - Implement the solution following the issue requirements precisely
 - Follow the project's coding conventions and best practices:
-  - Rust: keep conversion logic in pure functions independent of wasm-bindgen so `cargo test` covers it; expose only a thin `#[wasm_bindgen]` wrapper
-  - Rust: return `Result` and map errors to `JsError` at the boundary; no `unwrap()` on user-input paths
-  - Rust: build the Lindera tokenizer once (lazily) and reuse it across calls
+  - Worker: keep request validation and prompt/response handling in pure functions so Vitest covers them; keep `web/worker/index.ts` a thin entry point
+  - Worker: never log input text; validate the model output before returning it; no secrets in source (use Worker secrets and `web/.dev.vars`)
   - TypeScript: `strict` mode, no `any`; keep DOM wiring separate from pure logic so Vitest can test it
   - Frontend: use the design-token CSS custom properties instead of hard-coded colors and sizes
-  - Paths: resolve assets relative to the Vite `base` so the GitHub Pages subpath works
+  - Paths: serve the frontend from the site root via Workers Static Assets; call the API at `/api/convert`
 - Maintain consistency with existing code patterns
 - Add or update tests to cover the new functionality or bug fix
 - Update dependency configurations as needed
@@ -93,10 +92,6 @@ When given a GitHub issue number, execute this precise sequence:
 Execute the following checks in order:
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-wasm-pack build crates/engine --target web
 pnpm --dir web install --frozen-lockfile
 pnpm --dir web run lint
 pnpm --dir web run typecheck

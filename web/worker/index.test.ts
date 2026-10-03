@@ -26,6 +26,7 @@ function setup(
 		AI: { run },
 		RATE_LIMITER: { limit },
 		MODEL: "m",
+		AI_GATEWAY_ID: "gw",
 		TURNSTILE_SECRET_KEY: "secret",
 	};
 	const call = (
@@ -85,6 +86,7 @@ describe("POST /api/convert", () => {
 		expect(run).toHaveBeenCalledWith(
 			"m",
 			expect.objectContaining({ max_tokens: 2048 }),
+			{ gateway: { id: "gw" } },
 		);
 		const form = (
 			siteverify.mock.calls[0] as unknown as [string, RequestInit]
@@ -300,6 +302,15 @@ describe("POST /api/convert", () => {
 		const res = await call(req);
 		expect(res.status).toBe(502);
 		expect(run).toHaveBeenCalledTimes(2);
+	});
+
+	it("429 without retrying when the gateway rate limit is exceeded", async () => {
+		const { run, call } = setup([]);
+		run.mockRejectedValue(new Error("429: Too many requests"));
+		const res = await call(req);
+		expect(res.status).toBe(429);
+		expect(((await res.json()) as { error: string }).error).toMatch(/混み合/);
+		expect(run).toHaveBeenCalledTimes(1);
 	});
 
 	it("503 when inference throws", async () => {

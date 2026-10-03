@@ -7,7 +7,7 @@
 出力: [挨拶]、[人名][敬称]！
 ```
 
-入力したテキストは変換のために Cloudflare Workers AI（LLM）へ送信されます。Cloudflare Turnstile によるボット検証も行います。送信元 IP ごとに 60 秒あたり 5 回までの変換に制限しています（`web/wrangler.jsonc` の `ratelimits`）。入力テキストはログに残しません。
+入力したテキストは変換のために Cloudflare Workers AI（LLM）へ送信されます。Cloudflare Turnstile によるボット検証も行います。送信元 IP ごとに 60 秒あたり 5 回までの変換に制限しています（`web/wrangler.jsonc` の `ratelimits`）。この値はロケーションごとのおおよその値です。全体では AI Gateway `part-of-speech` のレート制限により、10 分あたり 300 回の推論までに制限しています。入力テキストはログに残しません。
 
 ## 機能
 

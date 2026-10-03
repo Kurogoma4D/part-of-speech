@@ -10,11 +10,18 @@ const SITEVERIFY_URL =
 	"https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 export interface Env {
-	AI: { run(model: string, input: unknown): Promise<unknown> };
+	AI: {
+		run(
+			model: string,
+			input: unknown,
+			options?: { gateway?: { id: string } },
+		): Promise<unknown>;
+	};
 	RATE_LIMITER: {
 		limit(options: { key: string }): Promise<{ success: boolean }>;
 	};
 	MODEL: string;
+	AI_GATEWAY_ID: string;
 	TURNSTILE_SECRET_KEY: string;
 }
 
@@ -51,12 +58,16 @@ interface AiOutput {
 // モデルは前後の空白・改行を落としがちなので、推論対象から外して結果に付け直す。
 async function infer(env: Env, input: string): Promise<string | null> {
 	const text = input.trim();
-	const out = (await env.AI.run(env.MODEL, {
-		messages: buildMessages(text),
-		response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
-		// 既定の 256 では長い入力の JSON が途中で切れる。
-		max_tokens: 2048,
-	})) as AiOutput | null;
+	const out = (await env.AI.run(
+		env.MODEL,
+		{
+			messages: buildMessages(text),
+			response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+			// 既定の 256 では長い入力の JSON が途中で切れる。
+			max_tokens: 2048,
+		},
+		{ gateway: { id: env.AI_GATEWAY_ID } },
+	)) as AiOutput | null;
 	// モデルによって応答の形が Workers AI 独自形式と OpenAI 互換形式に分かれる。
 	const tokens = parseTokens(
 		out?.response ?? out?.choices?.[0]?.message?.content,
@@ -69,8 +80,15 @@ async function infer(env: Env, input: string): Promise<string | null> {
 	);
 }
 
+// ゲートウェイのレート制限超過は 429 として binding の例外メッセージに現れる。
+const isGatewayLimit = (e: unknown) =>
+	e instanceof Error && /\b429\b|too many requests|rate limit/i.test(e.message);
+
 class InferFailure extends Error {
-	constructor(readonly threw: boolean) {
+	constructor(
+		readonly threw: boolean,
+		readonly limited = false,
+	) {
 		super();
 	}
 }
@@ -91,7 +109,9 @@ async function convertLine(
 			const result = await infer(env, line);
 			if (result !== null) return result;
 			threw = false;
-		} catch {
+		} catch (e) {
+			// 上限に達している間の再推論は無駄な呼び出しになる。
+			if (isGatewayLimit(e)) throw new InferFailure(true, true);
 			threw = true;
 		}
 	}
@@ -178,6 +198,11 @@ async function convert(request: Request, env: Env): Promise<Response> {
 		);
 	} catch (e) {
 		if (!(e instanceof InferFailure)) throw e;
+		if (e.limited)
+			return fail(
+				"ただいま混み合っています。しばらく待ってから再試行してください。",
+				429,
+			);
 		if (e.threw)
 			return fail("変換に失敗しました。時間をおいて再試行してください。", 503);
 		return fail("変換結果を得られませんでした。再試行してください。", 502);

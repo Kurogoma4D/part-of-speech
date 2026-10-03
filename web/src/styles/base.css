@@ -89,8 +89,34 @@ body {
 	overflow-wrap: anywhere;
 }
 
-.pane__box--output[data-status="loading"] {
-	opacity: 0.6;
+/* 変換中は空の結果欄にブラケットを 1 つずつ並べる。等幅フォント前提で 1 個 = 3ch。 */
+.pane__box--output[data-status="loading"]::before {
+	content: "[ ][ ][ ]" / "";
+	display: inline-block;
+	overflow: hidden;
+	white-space: pre;
+	vertical-align: top;
+	color: var(--color-text-muted);
+	animation: bracket-typing 1.2s step-end infinite;
+}
+
+@keyframes bracket-typing {
+	0% {
+		width: 3ch;
+	}
+	33% {
+		width: 6ch;
+	}
+	66%,
+	100% {
+		width: 9ch;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pane__box--output[data-status="loading"]::before {
+		animation: none;
+	}
 }
 
 .status {

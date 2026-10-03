@@ -35,12 +35,12 @@ config file or files an issue goes through the user's approval first.
 
 Project tech stack (use it to pick the right package manager, registry, and CI specifics):
 
-- **Engine**: Rust (stable) + Lindera with embedded IPADIC, compiled to WebAssembly via wasm-bindgen / wasm-pack
+- **Hosting / BFF**: Cloudflare Workers (Static Assets serve the frontend; the Worker handles `POST /api/convert`), deployed by GitHub Actions running `wrangler deploy` on push to `master`
+- **Inference**: Cloudflare Workers AI behind the AI Gateway `part-of-speech` (model ID in `web/wrangler.jsonc` `vars.MODEL`)
 - **Frontend**: Vite + TypeScript (no UI framework), plain CSS with design tokens (CSS custom properties)
-- **Testing**: `cargo test` (engine), Vitest (frontend)
-- **Lint / format**: rustfmt, clippy, Biome, `tsc --noEmit`
-- **Package managers**: Cargo, pnpm (Node.js LTS and pnpm pinned via mise)
-- **Hosting**: GitHub Pages (static files only), deployed by GitHub Actions on push to `master`
+- **Testing**: Vitest
+- **Lint / format**: Biome, `tsc --noEmit`
+- **Package manager**: pnpm (Node.js LTS and pnpm pinned via mise)
 
 ## Workflow
 

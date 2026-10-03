@@ -9,10 +9,13 @@ export interface Token {
 const LABEL_PATTERN =
 	/^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}A-Za-z0-9ー]{1,10}$/u;
 
-const PARTICLES = new Set(["を", "の", "に", "と", "は"]);
+// 文脈に沿わない文法ラベル（品詞名・その細分類・活用形・語幹）は不正とする。
+const GRAMMAR_LABEL =
+	/(?:名詞|動詞|形容詞|副詞|助詞|連体詞|接続詞|語幹|[用然体止定令志]形)$/u;
 
+// ひらがなだけの断片は機能語として原文のまま残せる。
 const PRESERVED =
-	/^(?:[\s\p{P}\p{S}\p{Extended_Pictographic}\p{Emoji_Modifier}笑wWｗＷーぁぃぅぇぉっゃゅょァィゥェォッャュョヮ]|\u200d|\ufe0f)*$/u;
+	/^(?:[\s\p{P}\p{S}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Script=Hiragana}笑wWｗＷーァィゥェォッャュョヮ]|\u200d|\ufe0f)*$/u;
 
 /** response_format に渡すスキーマ。label の pattern は解釈に依存しないよう含めない。 */
 export const RESPONSE_SCHEMA = {
@@ -35,9 +38,6 @@ export const RESPONSE_SCHEMA = {
 		},
 	},
 } as const;
-
-const isPreserved = (src: string): boolean =>
-	PARTICLES.has(src) || PRESERVED.test(src);
 
 /** 検証を通ったトークン列を返す。1 つでも満たさなければ null。 */
 export function parseTokens(raw: unknown, input: string): Token[] | null {
@@ -62,10 +62,11 @@ export function parseTokens(raw: unknown, input: string): Token[] | null {
 		if (Object.keys(rest).length > 0) return null;
 		if (typeof src !== "string" || src === "") return null;
 		if (label === null) {
-			if (!isPreserved(src)) return null;
+			if (!PRESERVED.test(src)) return null;
 		} else {
 			if (typeof label !== "string" || !LABEL_PATTERN.test(label)) return null;
 			if (label === src || src.trim() === "") return null;
+			if (GRAMMAR_LABEL.test(label)) return null;
 		}
 		out.push({ src, label });
 	}

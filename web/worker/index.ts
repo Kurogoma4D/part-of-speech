@@ -22,6 +22,8 @@ const fail = (error: string, status: number) => json({ error }, status);
 
 // 他サイトのウィジェットで発行されたトークンを流用されないよう hostname も照合する。
 async function verifyTurnstile(token: string, secret: string, host: string) {
+	// Turnstile のテストキーは siteverify が常に example.com を返すため、ローカル開発では照合できない。
+	const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(host);
 	const res = await fetch(SITEVERIFY_URL, {
 		method: "POST",
 		body: new URLSearchParams({ secret, response: token }),
@@ -29,7 +31,7 @@ async function verifyTurnstile(token: string, secret: string, host: string) {
 	});
 	if (!res.ok) throw new Error(`siteverify ${res.status}`);
 	const data = (await res.json()) as { success?: boolean; hostname?: string };
-	return data.success === true && data.hostname === host;
+	return data.success === true && (loopback || data.hostname === host);
 }
 
 interface AiOutput {
@@ -67,9 +69,9 @@ async function convert(request: Request, env: Env): Promise<Response> {
 
 	let body: { text?: unknown; turnstileToken?: unknown } | null;
 	try {
-		// Content-Length を持たない転送でも上限を守るため、読み込み後にも確認する。
+		// Content-Length を持たない転送は読み込み済みの本文を UTF-8 バイト数で事後確認する(バッファ前の制限ではない)。
 		const raw = await request.text();
-		if (raw.length > MAX_BODY_BYTES)
+		if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES)
 			return fail("リクエストが大きすぎます。", 413);
 		body = JSON.parse(raw);
 	} catch {

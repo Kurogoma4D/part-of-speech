@@ -27,10 +27,11 @@ function setup(
 		{
 			origin = ORIGIN,
 			method = "POST",
-		}: { origin?: string | null; method?: string } = {},
+			base = ORIGIN,
+		}: { origin?: string | null; method?: string; base?: string } = {},
 	) =>
 		worker.fetch(
-			new Request(`${ORIGIN}/api/convert`, {
+			new Request(`${base}/api/convert`, {
 				method,
 				headers: origin ? { origin } : {},
 				body: typeof body === "string" ? body : JSON.stringify(body),
@@ -59,6 +60,9 @@ describe("POST /api/convert", () => {
 		)[1].body as URLSearchParams;
 		expect(form.get("secret")).toBe("secret");
 		expect(form.get("response")).toBe("t");
+		expect(
+			(siteverify.mock.calls[0] as unknown as [string, RequestInit])[1].signal,
+		).toBeInstanceOf(AbortSignal);
 	});
 
 	it("accepts an already parsed response object", async () => {
@@ -113,6 +117,12 @@ describe("POST /api/convert", () => {
 		expect(run).not.toHaveBeenCalled();
 	});
 
+	it("skips the hostname check on loopback hosts (Turnstile test keys)", async () => {
+		const { call } = setup([good], { success: true, hostname: "example.com" });
+		const base = "http://localhost:8787";
+		expect((await call(req, { base, origin: base })).status).toBe(200);
+	});
+
 	it("502 without inference when siteverify throws or is not ok", async () => {
 		const { call, run, siteverify } = setup();
 		siteverify.mockRejectedValueOnce(new Error("timeout"));
@@ -139,11 +149,12 @@ describe("POST /api/convert", () => {
 	});
 
 	it("counts UTF-16 code units for the 500 limit, like the frontend", async () => {
-		const { call } = setup();
+		const emoji = "😀".repeat(250);
+		const { call } = setup([
+			JSON.stringify({ tokens: [{ src: emoji, label: null }] }),
+		]);
 		// 😀 は 2 単位なので 250 個で上限ちょうど、251 個で超過。
-		expect((await call({ ...req, text: "😀".repeat(250) })).status).not.toBe(
-			400,
-		);
+		expect((await call({ ...req, text: emoji })).status).toBe(200);
 		expect((await call({ ...req, text: "😀".repeat(251) })).status).toBe(400);
 	});
 

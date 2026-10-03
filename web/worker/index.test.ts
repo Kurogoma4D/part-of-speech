@@ -77,6 +77,38 @@ describe("POST /api/convert", () => {
 		expect(await res.json()).toEqual({ result: "\n [動物]！\n" });
 	});
 
+	it("infers each line separately and keeps newlines and blank lines", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			const user = (input as { messages: { content: string }[] }).messages.at(
+				-1,
+			)?.content;
+			return {
+				response: JSON.stringify({ tokens: [{ src: user, label: "行" }] }),
+			};
+		});
+		const res = await call({ text: "猫\r\n\n♪♪\n犬\n", turnstileToken: "t" });
+		expect(await res.json()).toEqual({ result: "[行]\r\n\n♪♪\n[行]\n" });
+		expect(run).toHaveBeenCalledTimes(2);
+	});
+
+	it("fails the whole request when one line fails", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			const user = (input as { messages: { content: string }[] }).messages.at(
+				-1,
+			)?.content;
+			return {
+				response:
+					user === "猫"
+						? JSON.stringify({ tokens: [{ src: "猫", label: "動物" }] })
+						: JSON.stringify({ tokens: [{ src: "x", label: "動物" }] }),
+			};
+		});
+		const res = await call({ text: "猫\n犬", turnstileToken: "t" });
+		expect(res.status).toBe(502);
+	});
+
 	it("403 for foreign or missing Origin, before anything else", async () => {
 		const { call, siteverify, run } = setup();
 		expect((await call(req, { origin: "https://evil.example" })).status).toBe(

@@ -60,6 +60,30 @@ async function infer(env: Env, input: string): Promise<string | null> {
 	);
 }
 
+class InferFailure extends Error {
+	constructor(readonly threw: boolean) {
+		super();
+	}
+}
+
+// 複数行の入力を 1 回で推論すると、推論(思考)が max_tokens を使い切って応答が空になる。
+async function convertLine(env: Env, line: string): Promise<string> {
+	// 文字・数字を含まない行(空行・記号・絵文字・改行そのもの)はそのまま残す。
+	if (!/[\p{L}\p{N}]/u.test(line)) return line;
+	// 推論の例外と形式不正は同じ再試行枠(合計 2 回)を共有する。
+	let threw = false;
+	for (let attempt = 0; attempt < 2; attempt++) {
+		try {
+			const result = await infer(env, line);
+			if (result !== null) return result;
+			threw = false;
+		} catch {
+			threw = true;
+		}
+	}
+	throw new InferFailure(threw);
+}
+
 async function convert(request: Request, env: Env): Promise<Response> {
 	if (request.headers.get("origin") !== new URL(request.url).origin)
 		return fail("許可されていないオリジンです。", 403);
@@ -94,20 +118,18 @@ async function convert(request: Request, env: Env): Promise<Response> {
 		return fail("ボット検証を完了できませんでした。", 502);
 	}
 
-	// 推論の例外と形式不正は同じ再試行枠(合計 2 回)を共有する。
-	let threw = false;
-	for (let attempt = 0; attempt < 2; attempt++) {
-		try {
-			const result = await infer(env, text);
-			if (result !== null) return json({ result }, 200);
-			threw = false;
-		} catch {
-			threw = true;
-		}
+	try {
+		// 改行ごとに並列で推論する。1 行でも失敗すれば全体を失敗とする。
+		const lines = await Promise.all(
+			text.split(/(\r?\n)/).map((line) => convertLine(env, line)),
+		);
+		return json({ result: lines.join("") }, 200);
+	} catch (e) {
+		if (!(e instanceof InferFailure)) throw e;
+		if (e.threw)
+			return fail("変換に失敗しました。時間をおいて再試行してください。", 503);
+		return fail("変換結果を得られませんでした。再試行してください。", 502);
 	}
-	if (threw)
-		return fail("変換に失敗しました。時間をおいて再試行してください。", 503);
-	return fail("変換結果を得られませんでした。再試行してください。", 502);
 }
 
 // Static Assets は run_worker_first で /api/* だけを Worker に回す。

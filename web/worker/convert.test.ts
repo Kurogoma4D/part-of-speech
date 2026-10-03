@@ -75,6 +75,15 @@ describe("parseTokens rejects", () => {
 		expect(ok([tok("猫！", null)], "猫！")).toBe(false);
 		expect(ok([tok("ネコ", null)], "ネコ")).toBe(false);
 	});
+	it("full-width bracket labels", () => {
+		for (const label of ["［名詞］", "【名詞】"])
+			expect(parseTokens({ tokens: [{ src: "猫", label }] }, "猫")).toBeNull();
+	});
+	it("bare digits as null", () => {
+		expect(
+			parseTokens({ tokens: [{ src: "1", label: null }] }, "1"),
+		).toBeNull();
+	});
 	it("grammar labels", () => {
 		for (const label of [
 			"名詞",
@@ -104,6 +113,13 @@ describe("parseTokens accepts", () => {
 			{ src: "ー", label: null },
 		];
 		expect(parseTokens({ tokens }, "今日もいいねー")).not.toBeNull();
+	});
+	it("keycap emoji as null", () => {
+		const tokens = [
+			{ src: "1️⃣", label: null },
+			{ src: "#️⃣", label: null },
+		];
+		expect(parseTokens({ tokens }, "1️⃣#️⃣")).not.toBeNull();
 	});
 	it("semantic labels that merely resemble grammar words", () => {
 		const tokens = [{ src: "歌", label: "歌詞" }];

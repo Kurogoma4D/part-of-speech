@@ -123,12 +123,12 @@ describe("POST /api/convert", () => {
 		const { call, siteverify } = setup();
 		expect((await call({ ...req, text: "" })).status).toBe(400);
 		expect((await call({ ...req, text: " \n" })).status).toBe(400);
-		expect((await call({ ...req, text: "あ".repeat(501) })).status).toBe(400);
+		expect((await call({ ...req, text: "あ".repeat(201) })).status).toBe(400);
 		expect((await call("{")).status).toBe(400);
 		expect((await call({ text: "猫" })).status).toBe(400);
 		expect(siteverify).not.toHaveBeenCalled();
 		expect(
-			(await setup().call({ ...req, text: "あ".repeat(500) })).status,
+			(await setup().call({ ...req, text: "あ".repeat(200) })).status,
 		).not.toBe(400);
 	});
 
@@ -180,14 +180,14 @@ describe("POST /api/convert", () => {
 		expect(siteverify).not.toHaveBeenCalled();
 	});
 
-	it("counts UTF-16 code units for the 500 limit, like the frontend", async () => {
-		const emoji = "😀".repeat(250);
+	it("counts UTF-16 code units for the 200 limit, like the frontend", async () => {
+		const emoji = "😀".repeat(100);
 		const { call } = setup([
 			JSON.stringify({ tokens: [{ src: emoji, label: null }] }),
 		]);
-		// 😀 は 2 単位なので 250 個で上限ちょうど、251 個で超過。
+		// 😀 は 2 単位なので 100 個で上限ちょうど、101 個で超過。
 		expect((await call({ ...req, text: emoji })).status).toBe(200);
-		expect((await call({ ...req, text: "😀".repeat(251) })).status).toBe(400);
+		expect((await call({ ...req, text: "😀".repeat(101) })).status).toBe(400);
 	});
 
 	it("retries once on invalid output", async () => {

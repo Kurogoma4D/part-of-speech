@@ -1,8 +1,8 @@
 import { assemble, parseTokens, RESPONSE_SCHEMA } from "./convert";
 import { buildMessages } from "./prompt";
 
-const MAX_TEXT_LENGTH = 500;
-// 500 文字(最大 4 バイト/文字の JSON エスケープ込み)とトークンを収めるのに十分な上限。
+const MAX_TEXT_LENGTH = 200;
+// 200 文字(最大 4 バイト/文字の JSON エスケープ込み)とトークンを収めるのに十分な上限。
 const MAX_BODY_BYTES = 8 * 1024;
 const SITEVERIFY_URL =
 	"https://challenges.cloudflare.com/turnstile/v0/siteverify";

@@ -41,6 +41,17 @@ function setup(
 	return { run, siteverify, call };
 }
 
+const lastUser = (input: unknown) =>
+	(input as { messages: { content: string }[] }).messages.at(-1)?.content;
+const inputs = (run: ReturnType<typeof vi.fn>) =>
+	run.mock.calls.map((c) => lastUser(c[1]));
+const echo = (run: ReturnType<typeof vi.fn>) =>
+	run.mockImplementation(async (_m: string, input: unknown) => ({
+		response: JSON.stringify({
+			tokens: [{ src: lastUser(input), label: "行" }],
+		}),
+	}));
+
 const req = { text: "猫！", turnstileToken: "t" };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -77,6 +88,104 @@ describe("POST /api/convert", () => {
 		expect(await res.json()).toEqual({ result: "\n [動物]！\n" });
 	});
 
+	it("infers each line separately and keeps newlines and blank lines", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			const user = (input as { messages: { content: string }[] }).messages.at(
+				-1,
+			)?.content;
+			return {
+				response: JSON.stringify({ tokens: [{ src: user, label: "行" }] }),
+			};
+		});
+		const res = await call({ text: "猫\r\n\n♪♪\n犬\n", turnstileToken: "t" });
+		expect(await res.json()).toEqual({ result: "[行]\r\n\n♪♪\n[行]\n" });
+		expect(run).toHaveBeenCalledTimes(2);
+		expect(inputs(run)).toEqual(["猫", "犬"]);
+	});
+
+	it("infers duplicate lines once and reuses the result", async () => {
+		const { call, run } = setup([]);
+		echo(run);
+		const res = await call({ text: "猫\n犬\n猫\n猫", turnstileToken: "t" });
+		expect(await res.json()).toEqual({ result: "[行]\n[行]\n[行]\n[行]" });
+		expect(inputs(run)).toEqual(["猫", "犬"]);
+	});
+
+	it("400 above 20 distinct lines, before siteverify and inference", async () => {
+		const { call, run, siteverify } = setup();
+		const lines = (n: number) =>
+			Array.from({ length: n }, (_, i) => `あ${i}`).join("\n");
+		const res = await call({ text: lines(21), turnstileToken: "t" });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: expect.stringContaining("20") });
+		expect(siteverify).not.toHaveBeenCalled();
+		expect(run).not.toHaveBeenCalled();
+		const ok = setup([]);
+		echo(ok.run);
+		expect(
+			(await ok.call({ text: lines(20), turnstileToken: "t" })).status,
+		).toBe(200);
+		// 同じ行の繰り返しは異なる行として数えない。
+		const dup = setup([]);
+		echo(dup.run);
+		expect(
+			(
+				await dup.call({
+					text: "あ\n".repeat(100).slice(0, 200),
+					turnstileToken: "t",
+				})
+			).status,
+		).toBe(200);
+		expect(dup.run).toHaveBeenCalledTimes(1);
+	});
+
+	it("runs at most 4 inferences at a time", async () => {
+		const { call, run } = setup([]);
+		let active = 0;
+		let peak = 0;
+		run.mockImplementation(async () => {
+			peak = Math.max(peak, ++active);
+			await new Promise((r) => setTimeout(r, 5));
+			active--;
+			return { response: good };
+		});
+		const text = Array.from({ length: 12 }, (_, i) => `猫${i}`).join("\n");
+		await call({ text, turnstileToken: "t" });
+		expect(peak).toBe(4);
+	});
+
+	it("503 when one of several lines throws", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			if (lastUser(input) === "犬") throw new Error("quota");
+			return {
+				response: JSON.stringify({
+					tokens: [{ src: lastUser(input), label: "行" }],
+				}),
+			};
+		});
+		const res = await call({ text: "猫\n犬\n鳥", turnstileToken: "t" });
+		expect(res.status).toBe(503);
+	});
+
+	it("fails the whole request when one line fails", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			const user = (input as { messages: { content: string }[] }).messages.at(
+				-1,
+			)?.content;
+			return {
+				response:
+					user === "猫"
+						? JSON.stringify({ tokens: [{ src: "猫", label: "動物" }] })
+						: JSON.stringify({ tokens: [{ src: "x", label: "動物" }] }),
+			};
+		});
+		const res = await call({ text: "猫\n犬", turnstileToken: "t" });
+		expect(res.status).toBe(502);
+	});
+
 	it("403 for foreign or missing Origin, before anything else", async () => {
 		const { call, siteverify, run } = setup();
 		expect((await call(req, { origin: "https://evil.example" })).status).toBe(
@@ -91,12 +200,12 @@ describe("POST /api/convert", () => {
 		const { call, siteverify } = setup();
 		expect((await call({ ...req, text: "" })).status).toBe(400);
 		expect((await call({ ...req, text: " \n" })).status).toBe(400);
-		expect((await call({ ...req, text: "あ".repeat(501) })).status).toBe(400);
+		expect((await call({ ...req, text: "あ".repeat(201) })).status).toBe(400);
 		expect((await call("{")).status).toBe(400);
 		expect((await call({ text: "猫" })).status).toBe(400);
 		expect(siteverify).not.toHaveBeenCalled();
 		expect(
-			(await setup().call({ ...req, text: "あ".repeat(500) })).status,
+			(await setup().call({ ...req, text: "あ".repeat(200) })).status,
 		).not.toBe(400);
 	});
 
@@ -148,14 +257,14 @@ describe("POST /api/convert", () => {
 		expect(siteverify).not.toHaveBeenCalled();
 	});
 
-	it("counts UTF-16 code units for the 500 limit, like the frontend", async () => {
-		const emoji = "😀".repeat(250);
+	it("counts UTF-16 code units for the 200 limit, like the frontend", async () => {
+		const emoji = "😀".repeat(100);
 		const { call } = setup([
 			JSON.stringify({ tokens: [{ src: emoji, label: null }] }),
 		]);
-		// 😀 は 2 単位なので 250 個で上限ちょうど、251 個で超過。
+		// 😀 は 2 単位なので 100 個で上限ちょうど、101 個で超過。
 		expect((await call({ ...req, text: emoji })).status).toBe(200);
-		expect((await call({ ...req, text: "😀".repeat(251) })).status).toBe(400);
+		expect((await call({ ...req, text: "😀".repeat(101) })).status).toBe(400);
 	});
 
 	it("retries once on invalid output", async () => {

@@ -7,7 +7,7 @@ export interface ConverterState {
 	message: string;
 }
 
-export const MAX_LENGTH = 500;
+export const MAX_LENGTH = 200;
 
 export const remainingChars = (text: string): number =>
 	MAX_LENGTH - text.length;

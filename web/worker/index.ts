@@ -1,8 +1,10 @@
 import { assemble, parseTokens, RESPONSE_SCHEMA } from "./convert";
 import { buildMessages } from "./prompt";
 
-const MAX_TEXT_LENGTH = 500;
-// 500 文字(最大 4 バイト/文字の JSON エスケープ込み)とトークンを収めるのに十分な上限。
+const MAX_TEXT_LENGTH = 200;
+const MAX_INFERABLE_LINES = 20;
+const CONCURRENCY = 4;
+// 200 文字(最大 4 バイト/文字の JSON エスケープ込み)とトークンを収めるのに十分な上限。
 const MAX_BODY_BYTES = 8 * 1024;
 const SITEVERIFY_URL =
 	"https://challenges.cloudflare.com/turnstile/v0/siteverify";
@@ -60,6 +62,57 @@ async function infer(env: Env, input: string): Promise<string | null> {
 	);
 }
 
+class InferFailure extends Error {
+	constructor(readonly threw: boolean) {
+		super();
+	}
+}
+
+// 文字・数字を含まない行(空行・記号・絵文字・改行そのもの)は推論せず原文のまま残す。
+const isInferable = (line: string) => /[\p{L}\p{N}]/u.test(line);
+
+// 複数行の入力を 1 回で推論すると、推論(思考)が max_tokens を使い切って応答が空になる。
+async function convertLine(
+	env: Env,
+	line: string,
+	stopped: () => boolean,
+): Promise<string> {
+	// 推論の例外と形式不正は同じ再試行枠(合計 2 回)を共有する。
+	let threw = false;
+	for (let attempt = 0; attempt < 2 && !stopped(); attempt++) {
+		try {
+			const result = await infer(env, line);
+			if (result !== null) return result;
+			threw = false;
+		} catch {
+			threw = true;
+		}
+	}
+	throw new InferFailure(threw);
+}
+
+// 同時実行数を抑え、1 行でも失敗したら残りの行は開始しない。
+async function convertLines(env: Env, lines: string[]) {
+	const results = new Map<string, string>();
+	const queue = [...lines];
+	let failure: InferFailure | undefined;
+	const worker = async () => {
+		for (let line = queue.shift(); line !== undefined; line = queue.shift()) {
+			if (failure) return;
+			try {
+				results.set(line, await convertLine(env, line, () => !!failure));
+			} catch (e) {
+				if (!(e instanceof InferFailure)) throw e;
+				failure ??= e;
+				return;
+			}
+		}
+	};
+	await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+	if (failure) throw failure;
+	return results;
+}
+
 async function convert(request: Request, env: Env): Promise<Response> {
 	if (request.headers.get("origin") !== new URL(request.url).origin)
 		return fail("許可されていないオリジンです。", 403);
@@ -83,6 +136,14 @@ async function convert(request: Request, env: Env): Promise<Response> {
 	if (text.trim() === "") return fail("テキストを入力してください。", 400);
 	if (text.length > MAX_TEXT_LENGTH)
 		return fail(`${MAX_TEXT_LENGTH}文字以内で入力してください。`, 400);
+	const parts = text.split(/(\r?\n)/);
+	// 重複行は 1 回だけ推論するので、上限は異なる行の数で数える。
+	const distinct = [...new Set(parts.filter(isInferable))];
+	if (distinct.length > MAX_INFERABLE_LINES)
+		return fail(
+			`行数が多すぎます。異なる行は${MAX_INFERABLE_LINES}行以内にしてください。`,
+			400,
+		);
 
 	try {
 		const host = new URL(request.url).hostname;
@@ -94,20 +155,18 @@ async function convert(request: Request, env: Env): Promise<Response> {
 		return fail("ボット検証を完了できませんでした。", 502);
 	}
 
-	// 推論の例外と形式不正は同じ再試行枠(合計 2 回)を共有する。
-	let threw = false;
-	for (let attempt = 0; attempt < 2; attempt++) {
-		try {
-			const result = await infer(env, text);
-			if (result !== null) return json({ result }, 200);
-			threw = false;
-		} catch {
-			threw = true;
-		}
+	try {
+		const results = await convertLines(env, distinct);
+		return json(
+			{ result: parts.map((p) => results.get(p) ?? p).join("") },
+			200,
+		);
+	} catch (e) {
+		if (!(e instanceof InferFailure)) throw e;
+		if (e.threw)
+			return fail("変換に失敗しました。時間をおいて再試行してください。", 503);
+		return fail("変換結果を得られませんでした。再試行してください。", 502);
 	}
-	if (threw)
-		return fail("変換に失敗しました。時間をおいて再試行してください。", 503);
-	return fail("変換結果を得られませんでした。再試行してください。", 502);
 }
 
 // Static Assets は run_worker_first で /api/* だけを Worker に回す。

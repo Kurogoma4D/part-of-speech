@@ -65,8 +65,8 @@ review.
 ### 2. Run review skills (full review only, non-trivial diffs only)
 
 When **no perspective is assigned** and the diff is non-trivial (roughly more than 50
-changed lines, or more than 3 files), run the built-in review skills before writing your own
-review — then verify each of their findings against the diff, fold confirmed ones into your
+changed lines, or more than 3 files), if the `code-review` and `security-review` skills are available in this environment, run them before writing your own
+review (otherwise perform the equivalent review yourself following the perspectives below) — then verify each of their findings against the diff, fold confirmed ones into your
 output with file/line references, and discard false positives.
 
 - `code-review`, passing the PR reference as the target.
@@ -79,7 +79,7 @@ output with file/line references, and discard false positives.
   ```
 
 When a perspective **is** assigned, or the diff is at or below that size, skip this step and
-review the diff directly. The built-in skills cover every perspective and run their own
+review the diff directly. The skills cover every perspective and run their own
 sub-reviewers — on a panel they duplicate both your work and the rest of the panel's, and on
 a small diff their cost outweighs what they find.
 

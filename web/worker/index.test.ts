@@ -306,11 +306,60 @@ describe("POST /api/convert", () => {
 
 	it("429 without retrying when the gateway rate limit is exceeded", async () => {
 		const { run, call } = setup([]);
-		run.mockRejectedValue(new Error("429: Too many requests"));
+		run.mockRejectedValue(new Error("2003: Rate limited"));
 		const res = await call(req);
 		expect(res.status).toBe(429);
 		expect(((await res.json()) as { error: string }).error).toMatch(/混み合/);
 		expect(run).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		"429: Too many requests",
+		"Rate limit",
+		"InferenceUpstreamError: request id 4290 failed",
+		"2003: Rate limited again",
+		"x2003: Rate limited",
+	])("503 for an unrelated error: %s", async (message) => {
+		const { call, run } = setup([]);
+		run.mockRejectedValue(new Error(message));
+		expect((await call(req)).status).toBe(503);
+		expect(run).toHaveBeenCalledTimes(2);
+	});
+
+	it("503 for a non-Error rejection that looks like the gateway limit", async () => {
+		const { call, run } = setup([]);
+		run.mockRejectedValue("2003: Rate limited");
+		expect((await call(req)).status).toBe(503);
+	});
+
+	it("429 when one line of a multi-line input hits the gateway limit", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			if (JSON.stringify(input).includes("犬"))
+				throw new Error("2003: Rate limited");
+			return { response: good };
+		});
+		const res = await call({ text: "猫\n犬\n鳥", turnstileToken: "t" });
+		expect(res.status).toBe(429);
+	});
+
+	it("429 without a third attempt when the retry hits the gateway limit", async () => {
+		const { call, run } = setup([bad]);
+		run.mockRejectedValueOnce(new Error("2003: Rate limited"));
+		const res = await call(req);
+		expect(res.status).toBe(429);
+		expect(run).toHaveBeenCalledTimes(2);
+	});
+
+	it("gateway limit takes precedence over a generic failure across lines", async () => {
+		const { call, run } = setup([]);
+		run.mockImplementation(async (_m: string, input: unknown) => {
+			const s = JSON.stringify(input);
+			if (s.includes("犬")) throw new Error("2003: Rate limited");
+			throw new Error("blip");
+		});
+		const res = await call({ text: "猫\n犬", turnstileToken: "t" });
+		expect(res.status).toBe(429);
 	});
 
 	it("503 when inference throws", async () => {

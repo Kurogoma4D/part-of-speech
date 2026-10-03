@@ -80,9 +80,9 @@ async function infer(env: Env, input: string): Promise<string | null> {
 	);
 }
 
-// ゲートウェイのレート制限超過は 429 として binding の例外メッセージに現れる。
+// ゲートウェイのレート制限超過は、code などの独自プロパティを持たない Error(message は "2003: Rate limited")として届く。
 const isGatewayLimit = (e: unknown) =>
-	e instanceof Error && /\b429\b|too many requests|rate limit/i.test(e.message);
+	e instanceof Error && /^2003: Rate limited$/.test(e.message);
 
 class InferFailure extends Error {
 	constructor(
@@ -123,6 +123,10 @@ async function convertLines(env: Env, lines: string[]) {
 	const results = new Map<string, string>();
 	const queue = [...lines];
 	let failure: InferFailure | undefined;
+	const record = (e: InferFailure) => {
+		// 同時に失敗した行があっても、ゲートウェイ制限を優先して応答の状態を一意にする。
+		if (!failure?.limited) failure = e;
+	};
 	const worker = async () => {
 		for (let line = queue.shift(); line !== undefined; line = queue.shift()) {
 			if (failure) return;
@@ -130,7 +134,7 @@ async function convertLines(env: Env, lines: string[]) {
 				results.set(line, await convertLine(env, line, () => !!failure));
 			} catch (e) {
 				if (!(e instanceof InferFailure)) throw e;
-				failure ??= e;
+				record(e);
 				return;
 			}
 		}

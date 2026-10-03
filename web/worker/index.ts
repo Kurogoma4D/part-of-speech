@@ -144,12 +144,32 @@ async function convertLines(env: Env, lines: string[]) {
 	return results;
 }
 
+// IPv6 の利用者は /64 以上を自由に使えるため、先頭 4 ヘクステットに丸めて同じ枠で数える。
+export function rateLimitKey(ip: string | null): string {
+	// cf-connecting-ip は Cloudflare のエッジが常に付与するので、無いのはローカル開発時だけ。その場合は共通キーで数える。
+	if (!ip) return "unknown";
+	if (!ip.includes(":")) return ip;
+	const [head, tail] = ip.split("::");
+	const part = (g: string | undefined) => (g ? g.split(":") : []);
+	// 末尾の IPv4 表記は 2 ヘクステット分として数える。
+	const size = (g: string[]) =>
+		g.length + g.filter((x) => x.includes(".")).length;
+	const left = part(head);
+	const right = tail === undefined ? [] : part(tail);
+	const zeros = Array(Math.max(0, 8 - size(left) - size(right))).fill("0");
+	const groups = tail === undefined ? left : [...left, ...zeros, ...right];
+	return `${groups
+		.slice(0, 4)
+		.map((g) => Number.parseInt(g, 16).toString(16))
+		.join(":")}::/64`;
+}
+
 async function convert(request: Request, env: Env): Promise<Response> {
 	if (request.headers.get("origin") !== new URL(request.url).origin)
 		return fail("許可されていないオリジンです。", 403);
 
 	// 本文の検証や Turnstile より前に判定し、超過した送信元には siteverify も推論も実行しない。
-	const key = request.headers.get("cf-connecting-ip") ?? "unknown";
+	const key = rateLimitKey(request.headers.get("cf-connecting-ip"));
 	if (!(await env.RATE_LIMITER.limit({ key })).success)
 		return fail(
 			"リクエストが多すぎます。しばらく待ってから再試行してください。",

@@ -21,7 +21,13 @@ function setup(
 	for (const response of responses) run.mockResolvedValueOnce({ response });
 	const siteverify = vi.fn(async () => Response.json(turnstile));
 	vi.stubGlobal("fetch", siteverify);
-	const env: Env = { AI: { run }, MODEL: "m", TURNSTILE_SECRET_KEY: "secret" };
+	const limit = vi.fn(async () => ({ success: true }));
+	const env: Env = {
+		AI: { run },
+		RATE_LIMITER: { limit },
+		MODEL: "m",
+		TURNSTILE_SECRET_KEY: "secret",
+	};
 	const call = (
 		body: unknown,
 		{
@@ -33,12 +39,15 @@ function setup(
 		worker.fetch(
 			new Request(`${base}/api/convert`, {
 				method,
-				headers: origin ? { origin } : {},
+				headers: {
+					...(origin ? { origin } : {}),
+					"cf-connecting-ip": "203.0.113.7",
+				},
 				body: typeof body === "string" ? body : JSON.stringify(body),
 			}),
 			env,
 		);
-	return { run, siteverify, call };
+	return { run, siteverify, limit, call };
 }
 
 const lastUser = (input: unknown) =>
@@ -57,6 +66,16 @@ const req = { text: "猫！", turnstileToken: "t" };
 afterEach(() => vi.unstubAllGlobals());
 
 describe("POST /api/convert", () => {
+	it("429 when rate limited, before turnstile and inference", async () => {
+		const { run, siteverify, limit, call } = setup();
+		limit.mockResolvedValueOnce({ success: false });
+		const res = await call(req);
+		expect(res.status).toBe(429);
+		expect(limit).toHaveBeenCalledWith({ key: "203.0.113.7" });
+		expect(siteverify).not.toHaveBeenCalled();
+		expect(run).not.toHaveBeenCalled();
+	});
+
 	it("200 with assembled result", async () => {
 		const { call, run, siteverify } = setup();
 		const res = await call(req);
@@ -252,7 +271,9 @@ describe("POST /api/convert", () => {
 				headers: { origin: ORIGIN, "content-length": "9000" },
 				body: JSON.stringify(req),
 			}),
-			{} as Env,
+			{
+				RATE_LIMITER: { limit: async () => ({ success: true }) },
+			} as unknown as Env,
 		);
 		expect(withHeader.status).toBe(413);
 		expect(siteverify).not.toHaveBeenCalled();

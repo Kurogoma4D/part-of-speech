@@ -11,6 +11,9 @@ const SITEVERIFY_URL =
 
 export interface Env {
 	AI: { run(model: string, input: unknown): Promise<unknown> };
+	RATE_LIMITER: {
+		limit(options: { key: string }): Promise<{ success: boolean }>;
+	};
 	MODEL: string;
 	TURNSTILE_SECRET_KEY: string;
 }
@@ -120,6 +123,14 @@ async function convertLines(env: Env, lines: string[]) {
 async function convert(request: Request, env: Env): Promise<Response> {
 	if (request.headers.get("origin") !== new URL(request.url).origin)
 		return fail("許可されていないオリジンです。", 403);
+
+	// 本文の検証や Turnstile より前に判定し、超過した送信元には siteverify も推論も実行しない。
+	const key = request.headers.get("cf-connecting-ip") ?? "unknown";
+	if (!(await env.RATE_LIMITER.limit({ key })).success)
+		return fail(
+			"リクエストが多すぎます。しばらく待ってから再試行してください。",
+			429,
+		);
 
 	if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES)
 		return fail("リクエストが大きすぎます。", 413);

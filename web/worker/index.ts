@@ -2,6 +2,8 @@ import { assemble, parseTokens, RESPONSE_SCHEMA } from "./convert";
 import { buildMessages } from "./prompt";
 
 const MAX_TEXT_LENGTH = 500;
+// 500 文字(最大 4 バイト/文字の JSON エスケープ込み)とトークンを収めるのに十分な上限。
+const MAX_BODY_BYTES = 8 * 1024;
 const SITEVERIFY_URL =
 	"https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -18,13 +20,18 @@ const json = (body: unknown, status: number, headers?: HeadersInit) =>
 	});
 const fail = (error: string, status: number) => json({ error }, status);
 
-async function verifyTurnstile(token: string, secret: string) {
+// 他サイトのウィジェットで発行されたトークンを流用されないよう hostname も照合する。
+async function verifyTurnstile(token: string, secret: string, host: string) {
+	// Turnstile のテストキーは siteverify が常に example.com を返すため、ローカル開発では照合できない。
+	const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(host);
 	const res = await fetch(SITEVERIFY_URL, {
 		method: "POST",
 		body: new URLSearchParams({ secret, response: token }),
+		signal: AbortSignal.timeout(5000),
 	});
-	const data = (await res.json()) as { success?: boolean };
-	return data.success === true;
+	if (!res.ok) throw new Error(`siteverify ${res.status}`);
+	const data = (await res.json()) as { success?: boolean; hostname?: string };
+	return data.success === true && (loopback || data.hostname === host);
 }
 
 interface AiOutput {
@@ -57,9 +64,16 @@ async function convert(request: Request, env: Env): Promise<Response> {
 	if (request.headers.get("origin") !== new URL(request.url).origin)
 		return fail("許可されていないオリジンです。", 403);
 
+	if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES)
+		return fail("リクエストが大きすぎます。", 413);
+
 	let body: { text?: unknown; turnstileToken?: unknown } | null;
 	try {
-		body = await request.json();
+		// Content-Length を持たない転送は読み込み済みの本文を UTF-8 バイト数で事後確認する(バッファ前の制限ではない)。
+		const raw = await request.text();
+		if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES)
+			return fail("リクエストが大きすぎます。", 413);
+		body = JSON.parse(raw);
 	} catch {
 		return fail("リクエストの形式が正しくありません。", 400);
 	}
@@ -71,7 +85,10 @@ async function convert(request: Request, env: Env): Promise<Response> {
 		return fail(`${MAX_TEXT_LENGTH}文字以内で入力してください。`, 400);
 
 	try {
-		if (!(await verifyTurnstile(turnstileToken, env.TURNSTILE_SECRET_KEY)))
+		const host = new URL(request.url).hostname;
+		if (
+			!(await verifyTurnstile(turnstileToken, env.TURNSTILE_SECRET_KEY, host))
+		)
 			return fail("ボット検証に失敗しました。", 403);
 	} catch {
 		return fail("ボット検証を完了できませんでした。", 502);

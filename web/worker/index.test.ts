@@ -10,7 +10,13 @@ const good = JSON.stringify({
 });
 const bad = JSON.stringify({ tokens: [{ src: "犬", label: "動物" }] });
 
-function setup(responses: unknown[] = [good], turnstile = { success: true }) {
+function setup(
+	responses: unknown[] = [good],
+	turnstile: Record<string, unknown> = {
+		success: true,
+		hostname: new URL(ORIGIN).hostname,
+	},
+) {
 	const run = vi.fn();
 	for (const response of responses) run.mockResolvedValueOnce({ response });
 	const siteverify = vi.fn(async () => Response.json(turnstile));
@@ -21,10 +27,11 @@ function setup(responses: unknown[] = [good], turnstile = { success: true }) {
 		{
 			origin = ORIGIN,
 			method = "POST",
-		}: { origin?: string | null; method?: string } = {},
+			base = ORIGIN,
+		}: { origin?: string | null; method?: string; base?: string } = {},
 	) =>
 		worker.fetch(
-			new Request(`${ORIGIN}/api/convert`, {
+			new Request(`${base}/api/convert`, {
 				method,
 				headers: origin ? { origin } : {},
 				body: typeof body === "string" ? body : JSON.stringify(body),
@@ -53,6 +60,9 @@ describe("POST /api/convert", () => {
 		)[1].body as URLSearchParams;
 		expect(form.get("secret")).toBe("secret");
 		expect(form.get("response")).toBe("t");
+		expect(
+			(siteverify.mock.calls[0] as unknown as [string, RequestInit])[1].signal,
+		).toBeInstanceOf(AbortSignal);
 	});
 
 	it("accepts an already parsed response object", async () => {
@@ -96,6 +106,56 @@ describe("POST /api/convert", () => {
 		expect(res.status).toBe(403);
 		expect(await res.json()).toHaveProperty("error");
 		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("403 when the Turnstile hostname differs", async () => {
+		const { call, run } = setup([good], {
+			success: true,
+			hostname: "evil.example",
+		});
+		expect((await call(req)).status).toBe(403);
+		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("skips the hostname check on loopback hosts (Turnstile test keys)", async () => {
+		const { call } = setup([good], { success: true, hostname: "example.com" });
+		const base = "http://localhost:8787";
+		expect((await call(req, { base, origin: base })).status).toBe(200);
+	});
+
+	it("502 without inference when siteverify throws or is not ok", async () => {
+		const { call, run, siteverify } = setup();
+		siteverify.mockRejectedValueOnce(new Error("timeout"));
+		expect((await call(req)).status).toBe(502);
+		siteverify.mockResolvedValueOnce(new Response("x", { status: 500 }));
+		expect((await call(req)).status).toBe(502);
+		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("413 for oversized bodies, by header or by content", async () => {
+		const { call, siteverify } = setup();
+		const big = { ...req, text: "あ".repeat(9000) };
+		expect((await call(big)).status).toBe(413);
+		const withHeader = await worker.fetch(
+			new Request(`${ORIGIN}/api/convert`, {
+				method: "POST",
+				headers: { origin: ORIGIN, "content-length": "9000" },
+				body: JSON.stringify(req),
+			}),
+			{} as Env,
+		);
+		expect(withHeader.status).toBe(413);
+		expect(siteverify).not.toHaveBeenCalled();
+	});
+
+	it("counts UTF-16 code units for the 500 limit, like the frontend", async () => {
+		const emoji = "😀".repeat(250);
+		const { call } = setup([
+			JSON.stringify({ tokens: [{ src: emoji, label: null }] }),
+		]);
+		// 😀 は 2 単位なので 250 個で上限ちょうど、251 個で超過。
+		expect((await call({ ...req, text: emoji })).status).toBe(200);
+		expect((await call({ ...req, text: "😀".repeat(251) })).status).toBe(400);
 	});
 
 	it("retries once on invalid output", async () => {

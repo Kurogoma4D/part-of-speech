@@ -14,8 +14,9 @@ const GRAMMAR_LABEL =
 	/(?:名詞|動詞|形容詞|副詞|助詞|連体詞|接続詞|語幹|[用然体止定令志]形)$/u;
 
 // ひらがなだけの断片は機能語として原文のまま残せる。
+// キーキャップ絵文字(1️⃣ など)は数字を含むが、数字単体は保持対象にしない。
 const PRESERVED =
-	/^(?:[\s\p{P}\p{S}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Script=Hiragana}笑wWｗＷーァィゥェォッャュョヮ]|\u200d|\ufe0f)*$/u;
+	/^(?:[0-9#*]\ufe0f?\u20e3|[\s\p{P}\p{S}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Script=Hiragana}笑wWｗＷーァィゥェォッャュョヮ]|\u200d|\ufe0f)*$/u;
 
 /** response_format に渡すスキーマ。label の pattern は解釈に依存しないよう含めない。 */
 export const RESPONSE_SCHEMA = {

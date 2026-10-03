@@ -19,7 +19,7 @@ const guideExamples = [
 );
 
 describe("guide examples", () => {
-	it("finds all examples", () => expect(guideExamples).toHaveLength(13));
+	it("finds all examples", () => expect(guideExamples).toHaveLength(14));
 
 	it.each(guideExamples.map((e) => [e.input, e] as const))("%j", (_, e) => {
 		const tokens = parseTokens({ tokens: e.tokens }, e.input);
@@ -51,7 +51,7 @@ describe("parseTokens rejects", () => {
 		expect(ok([{ src: "猫" }], "猫")).toBe(false);
 	});
 	it("parses a JSON string", () => {
-		const raw = JSON.stringify({ tokens: [tok("猫", "名詞")] });
+		const raw = JSON.stringify({ tokens: [tok("猫", "動物")] });
 		expect(parseTokens(raw, "猫")).not.toBeNull();
 	});
 	it("concatenation mismatch", () => {
@@ -72,7 +72,41 @@ describe("parseTokens rejects", () => {
 	});
 	it("null label on content words", () => {
 		expect(ok([tok("猫", null)], "猫")).toBe(false);
-		expect(ok([tok("が", null)], "が")).toBe(false);
 		expect(ok([tok("猫！", null)], "猫！")).toBe(false);
+		expect(ok([tok("ネコ", null)], "ネコ")).toBe(false);
+	});
+	it("grammar labels", () => {
+		for (const label of [
+			"名詞",
+			"動詞",
+			"形容詞",
+			"助詞",
+			"助動詞",
+			"格助詞",
+			"終助詞",
+			"補助動詞",
+			"固有名詞",
+			"形容詞語幹",
+			"連用形",
+			"命令形",
+		])
+			expect(ok([tok("猫", label)], "猫")).toBe(false);
+	});
+});
+
+describe("parseTokens accepts", () => {
+	it("hiragana function words as null", () => {
+		const tokens = [
+			{ src: "今日", label: "時間" },
+			{ src: "も", label: null },
+			{ src: "いい", label: "評価" },
+			{ src: "ね", label: null },
+			{ src: "ー", label: null },
+		];
+		expect(parseTokens({ tokens }, "今日もいいねー")).not.toBeNull();
+	});
+	it("semantic labels that merely resemble grammar words", () => {
+		const tokens = [{ src: "歌", label: "歌詞" }];
+		expect(parseTokens({ tokens }, "歌")).not.toBeNull();
 	});
 });

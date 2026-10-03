@@ -4,11 +4,11 @@ import worker, { type Env } from "./index";
 const ORIGIN = "https://part-of-speech.example.workers.dev";
 const good = JSON.stringify({
 	tokens: [
-		{ src: "猫", label: "名詞" },
+		{ src: "猫", label: "動物" },
 		{ src: "！", label: null },
 	],
 });
-const bad = JSON.stringify({ tokens: [{ src: "犬", label: "名詞" }] });
+const bad = JSON.stringify({ tokens: [{ src: "犬", label: "動物" }] });
 
 function setup(responses: unknown[] = [good], turnstile = { success: true }) {
 	const run = vi.fn();
@@ -43,7 +43,7 @@ describe("POST /api/convert", () => {
 		const { call, run, siteverify } = setup();
 		const res = await call(req);
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ result: "[名詞]！" });
+		expect(await res.json()).toEqual({ result: "[動物]！" });
 		expect(run).toHaveBeenCalledWith(
 			"m",
 			expect.objectContaining({ max_tokens: 2048 }),
@@ -57,14 +57,14 @@ describe("POST /api/convert", () => {
 
 	it("accepts an already parsed response object", async () => {
 		const { call } = setup([JSON.parse(good)]);
-		expect(await (await call(req)).json()).toEqual({ result: "[名詞]！" });
+		expect(await (await call(req)).json()).toEqual({ result: "[動物]！" });
 	});
 
 	it("reads OpenAI-style choices and keeps surrounding whitespace", async () => {
 		const { call, run } = setup([]);
 		run.mockResolvedValueOnce({ choices: [{ message: { content: good } }] });
 		const res = await call({ ...req, text: "\n 猫！\n" });
-		expect(await res.json()).toEqual({ result: "\n [名詞]！\n" });
+		expect(await res.json()).toEqual({ result: "\n [動物]！\n" });
 	});
 
 	it("403 for foreign or missing Origin, before anything else", async () => {
